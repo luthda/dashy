@@ -21,7 +21,12 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         var kql = BuildKql(request.FreeText, request.TimeRange, request.TagFilters, request.Limit, request.EventTypes);
         var timespan = ToAppInsightsTimespan(request.TimeRange);
 
-        logger.LogDebug("App Insights KQL: {Kql}", kql);
+        logger.LogInformation(
+            "App Insights query for {Source} (eventTypes=[{EventTypes}], timespan={Timespan}):\n{Kql}",
+            request.SourceName,
+            request.EventTypes is { Count: > 0 } ? string.Join(",", request.EventTypes) : "all",
+            timespan ?? "(none)",
+            kql);
 
         return await ExecuteQueryAsync(cfg.AppId, cfg.ApiKey, kql, timespan, request.SourceName, ct);
     }
@@ -58,7 +63,20 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
             .ReadFromJsonAsync<AppInsightsQueryResult>(ct)
             ?? throw new InvalidOperationException("Empty response from App Insights");
 
-        return MapToLogEntries(result, sourceName);
+        var entries = MapToLogEntries(result, sourceName);
+
+        var rawRows = result.Tables is [var tbl, ..] ? tbl.Rows.Count : 0;
+        var breakdown = entries.Count == 0
+            ? "(none)"
+            : string.Join(", ", entries
+                .GroupBy(e => e.EventType ?? "(null)")
+                .OrderByDescending(g => g.Count())
+                .Select(g => $"{g.Key}={g.Count()}"));
+        logger.LogInformation(
+            "App Insights {Source}: {RawRows} raw rows → {Mapped} entries [{Breakdown}]",
+            sourceName, rawRows, entries.Count, breakdown);
+
+        return entries;
     }
 
     // ── KQL builder ──────────────────────────────────────────────────────────
@@ -68,9 +86,9 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         ["traces"] = "(traces | extend eventType = \"trace\", eventMessage = message)",
         ["requests"] = "(requests | extend eventType = \"request\", eventMessage = strcat(name, \" \", resultCode, \" \", duration, \"ms\"))",
         ["dependencies"] = "(dependencies | extend eventType = \"dependency\", eventMessage = strcat(name, \" \", target, \" \", duration, \"ms \", \"success=\", success))",
-        ["exceptions"] = "(exceptions | extend eventType = \"exception\", eventMessage = strcat(type, \": \", coalesce(outerMessage, innermostMessage)), severityLevel = 3, exProblemId = problemId, exMethod = method, exAssembly = assembly, exInnermostMessage = innermostMessage)",
+        ["exceptions"] = "(exceptions | extend eventType = \"exception\", eventMessage = strcat(type, \": \", coalesce(outerMessage, innermostMessage)), severityLevel = toint(3), exProblemId = problemId, exMethod = method, exAssembly = assembly, exInnermostMessage = innermostMessage)",
         ["customEvents"] = "(customEvents | extend eventType = \"customEvent\", eventMessage = name)",
-        ["availabilityResults"] = "(availabilityResults | extend eventType = \"availability\", eventMessage = strcat(name, \" \", success), severityLevel = iff(success == \"True\", 1, 3))",
+        ["availabilityResults"] = "(availabilityResults | extend eventType = \"availability\", eventMessage = strcat(name, \" \", success), severityLevel = toint(iff(success == \"True\", 1, 3)))",
         ["pageViews"] = "(pageViews | extend eventType = \"pageView\", eventMessage = strcat(name, \" \", duration, \"ms\"))",
     };
 
@@ -93,7 +111,14 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
 
         // Determine which tables to include
         var tables = ResolveTableNames(eventTypes, tags.EventTypes);
-        var projections = tables.Select(t => TableProjections[t]).ToList();
+
+        // Limit EACH table to `limit` rows *before* the union. Without this, a
+        // single high-volume table (e.g. dependencies) consumes the entire global
+        // limit and starves low-volume-but-important tables like exceptions — they
+        // exist but never appear in the newest-N time-ordered window.
+        var projections = tables
+            .Select(t => $"({TableProjections[t]}\n   | top {limit} by timestamp desc)")
+            .ToList();
 
         if (projections.Count == 1)
             sb.Append(projections[0]);
@@ -142,7 +167,9 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
             sb.Append("\n| where ").Append(string.Join("\n    and ", clauses));
 
         sb.Append("\n| order by timestamp desc");
-        sb.Append($"\n| limit {limit}");
+        // Each table already contributed at most `limit` rows; cap the merged set
+        // generously so every included event type can still be represented.
+        sb.Append($"\n| limit {limit * Math.Max(1, tables.Count)}");
 
         return sb.ToString();
     }

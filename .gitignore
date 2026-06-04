@@ -52,6 +52,9 @@ build/
 .vite/
 *.tsbuildinfo
 *.local
+# This project standardises on npm (package-lock.json is the source of truth).
+# Ignore yarn lockfiles so a stray `yarn install` never gets committed.
+yarn.lock
 
 # ─── Environment & secrets ────────────────────────────────────────────────────
 .env
