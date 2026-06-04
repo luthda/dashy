@@ -36,6 +36,7 @@ Read multiple files if a task spans domains. Only read what you need.
 | Real-time | Server-Sent Events (SSE) via `/api/v1/alerts/stream` |
 | Toasts | shadcn `useToast` (Radix) only |
 | Charts | Recharts (log level bar chart) |
+| Package manager | Yarn (Classic) — use `yarn add`, never `npm install` |
 
 **Do not use:** `sonner`, global state libraries (Zustand, Redux, Jotai) unless explicitly agreed,
 direct database calls, `any` type, `@ts-ignore` without explanation.

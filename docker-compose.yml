@@ -1,0 +1,32 @@
+services:
+
+  dashy-api:
+    build:
+      context: ./backend
+      dockerfile: Dashy.Api/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - Database__ConnectionString=Data Source=/data/dashy.db
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    volumes:
+      - dashy-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  dashy-web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - dashy-api
+    restart: unless-stopped
+
+volumes:
+  dashy-data:

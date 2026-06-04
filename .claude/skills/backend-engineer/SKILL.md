@@ -55,7 +55,7 @@ Read multiple files if a task spans domains. Only read what you need.
 ## Project Structure
 
 ```
-src/
+backend/
   Dashy.Api/                  # ASP.NET Core Web API project
     Program.cs                # Host builder, service registration, middleware, endpoint mapping
     Endpoints/                # Minimal API endpoint groups (static classes)
@@ -69,6 +69,7 @@ src/
     BackgroundServices/       # IHostedService implementations
     Infrastructure/           # Cross-cutting: encryption, SSE, external API clients
   Dashy.Api.Tests/            # Test project
+  Dashy.sln                   # Solution file
 ```
 
 ---

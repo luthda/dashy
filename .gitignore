@@ -4,20 +4,36 @@ Thumbs.db
 desktop.ini
 
 # ─── .NET / C# ────────────────────────────────────────────────────────────────
-bin/
-obj/
+# Build output (case-insensitive — MSBuild/VS produce capitalised variants)
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+build/
+bld/
 *.user
 *.suo
+*.suo.*
 *.userosscache
 *.userprefs
 .vs/
+project.lock.json
+project.fragment.lock.json
+artifacts/
 *.ncrunchproject
 *.ncrunchsolution
 TestResults/
+[Tt]est[Rr]esult*/
 *.trx
 *.coverage
 *.coveragexml
-launchSettings.json
 
 # Published output
 publish/
@@ -32,8 +48,13 @@ out/
 node_modules/
 dist/
 dist-ssr/
+build/
 .vite/
+*.tsbuildinfo
 *.local
+# This project standardises on npm (package-lock.json is the source of truth).
+# Ignore yarn lockfiles so a stray `yarn install` never gets committed.
+yarn.lock
 
 # ─── Environment & secrets ────────────────────────────────────────────────────
 .env
@@ -52,8 +73,13 @@ dist-ssr/
 docker-compose.override.yml
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
-logs/
+/logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # ─── IDE ──────────────────────────────────────────────────────────────────────
 .idea/
