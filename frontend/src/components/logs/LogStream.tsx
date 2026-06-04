@@ -63,7 +63,7 @@ function LogRow({
   const levelDef = LEVELS.find((l) => l.id === entry.level)
   const evtDef = EVENT_TYPES.find((e) => e.id === entry.eventType)
   const ts = new Date(entry.timestamp)
-  const time = ts.toLocaleTimeString([], { hour12: false, fractionalSecondDigits: 3 })
+  const time = ts.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, fractionalSecondDigits: 3 })
   const service = entry.properties?.["service"] ?? entry.source
 
   return (
