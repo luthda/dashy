@@ -1,5 +1,5 @@
 import { api } from "@/lib/api"
-import type { ConnectionTestResult, Source } from "@/lib/types"
+import type { ConnectionTestResult, Source, SourceType } from "@/lib/types"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 const SOURCES_KEY = ["sources"] as const
@@ -14,7 +14,7 @@ export function useSourcesQuery() {
 export function useCreateSource() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (body: { name: string; type: string; config: object }) =>
+    mutationFn: (body: { name: string; type: SourceType; config: object }) =>
       api.post<Source>("/sources", body),
     onSuccess: () => qc.invalidateQueries({ queryKey: SOURCES_KEY }),
   })

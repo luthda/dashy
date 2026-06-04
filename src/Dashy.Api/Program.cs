@@ -35,9 +35,10 @@ builder.Services.AddDbContext<DashyDbContext>(opt =>
 // ── Infrastructure ────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<IEncryptionService, AesGcmEncryptionService>();
 
-// ── HTTP clients ──────────────────────────────────────────────────────────────
-builder.Services.AddHttpClient<AppInsightsClient>();
-builder.Services.AddHttpClient<LokiClient>();
+// ── Log source adapters ──────────────────────────────────────────────────────
+builder.Services.AddHttpClient<AppInsightsAdapter>();
+builder.Services.AddHttpClient<LokiAdapter>();
+builder.Services.AddTransient<ILogSourceAdapterFactory, LogSourceAdapterFactory>();
 
 // ── Services ──────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<SourceService>();

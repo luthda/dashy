@@ -1,9 +1,16 @@
 // ── Backend response types ──────────────────────────────────────────────────
 
+export const SourceType = {
+  AppInsights: "AppInsights",
+  Loki: "Loki",
+} as const
+
+export type SourceType = (typeof SourceType)[keyof typeof SourceType]
+
 export interface Source {
   id: string
   name: string
-  type: "AppInsights" | "Loki"
+  type: SourceType
   createdAt: string
 }
 
@@ -31,8 +38,8 @@ export interface LogQueryRequest {
 
 export interface TimeRange {
   type: "relative" | "absolute"
-  value?: string      // "15m" | "1h" | "6h" | "24h" | "7d"
-  from?: string       // ISO 8601 for absolute
+  value?: string // "15m" | "1h" | "6h" | "24h" | "7d"
+  from?: string // ISO 8601 for absolute
   to?: string
 }
 
@@ -53,8 +60,8 @@ export type SourceConfig = AppInsightsConfig | LokiConfig
 
 export const LEVELS = [
   { id: "error" as const, label: "Error", color: "var(--sev-error)" },
-  { id: "warn"  as const, label: "Warn",  color: "var(--sev-warn)"  },
-  { id: "info"  as const, label: "Info",  color: "var(--sev-info)"  },
+  { id: "warn" as const, label: "Warn", color: "var(--sev-warn)" },
+  { id: "info" as const, label: "Info", color: "var(--sev-info)" },
   { id: "debug" as const, label: "Debug", color: "var(--sev-debug)" },
   { id: "trace" as const, label: "Trace", color: "var(--sev-trace)" },
 ] as const
