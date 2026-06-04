@@ -48,6 +48,9 @@ builder.Services.AddScoped<LogQueryService>();
 builder.Services.ConfigureHttpJsonOptions(opt =>
 {
     opt.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+    // Accept/emit enums as their string names (e.g. "AppInsights", "Loki")
+    opt.SerializerOptions.Converters.Add(
+        new System.Text.Json.Serialization.JsonStringEnumConverter());
 });
 
 // ── CORS (for Vite dev server) ────────────────────────────────────────────────

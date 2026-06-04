@@ -15,7 +15,7 @@ public sealed class LokiAdapter(HttpClient http, ILogger<LokiAdapter> logger) : 
 
     public async Task<List<LogEntry>> QueryAsync(AdapterQueryRequest request, CancellationToken ct)
     {
-        var cfg = JsonSerializer.Deserialize<LokiConfig>(request.ConfigJson)
+        var cfg = JsonSerializer.Deserialize<LokiConfig>(request.ConfigJson, JsonSerializerOptions.Web)
             ?? throw new InvalidOperationException("Invalid Loki config");
 
         var (start, end) = ToLokiTimeRange(request.TimeRange);
@@ -30,7 +30,7 @@ public sealed class LokiAdapter(HttpClient http, ILogger<LokiAdapter> logger) : 
 
     public async Task TestConnectionAsync(string configJson, string sourceName, CancellationToken ct)
     {
-        var cfg = JsonSerializer.Deserialize<LokiConfig>(configJson)
+        var cfg = JsonSerializer.Deserialize<LokiConfig>(configJson, JsonSerializerOptions.Web)
             ?? throw new InvalidOperationException("Invalid Loki config");
 
         var now = DateTimeOffset.UtcNow;

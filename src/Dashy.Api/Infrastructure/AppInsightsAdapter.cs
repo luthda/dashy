@@ -15,7 +15,7 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
 
     public async Task<List<LogEntry>> QueryAsync(AdapterQueryRequest request, CancellationToken ct)
     {
-        var cfg = JsonSerializer.Deserialize<AppInsightsConfig>(request.ConfigJson)
+        var cfg = JsonSerializer.Deserialize<AppInsightsConfig>(request.ConfigJson, JsonSerializerOptions.Web)
             ?? throw new InvalidOperationException("Invalid App Insights config");
 
         var kql = BuildKql(request.FreeText, request.TimeRange, request.TagFilters, request.Limit);
@@ -28,7 +28,7 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
 
     public async Task TestConnectionAsync(string configJson, string sourceName, CancellationToken ct)
     {
-        var cfg = JsonSerializer.Deserialize<AppInsightsConfig>(configJson)
+        var cfg = JsonSerializer.Deserialize<AppInsightsConfig>(configJson, JsonSerializerOptions.Web)
             ?? throw new InvalidOperationException("Invalid App Insights config");
 
         await ExecuteQueryAsync(cfg.AppId, cfg.ApiKey, "traces | limit 1", null, sourceName, ct);
@@ -157,19 +157,37 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         }).ToList();
     }
 
-    private static DateTimeOffset ParseTimestamp(string?[] row, Dictionary<string, int> cols)
+    private static DateTimeOffset ParseTimestamp(JsonElement[] row, Dictionary<string, int> cols)
     {
         var raw = TryGetString(row, cols, "timestamp");
         return raw is not null && DateTimeOffset.TryParse(raw, out var ts) ? ts : DateTimeOffset.UtcNow;
     }
 
-    private static Dictionary<string, string> ParseCustomDimensions(string?[] row, Dictionary<string, int> cols)
+    private static Dictionary<string, string> ParseCustomDimensions(JsonElement[] row, Dictionary<string, int> cols)
     {
-        var raw = TryGetString(row, cols, "customDimensions");
-        if (string.IsNullOrEmpty(raw)) return [];
+        if (!cols.TryGetValue("customDimensions", out var idx) || idx >= row.Length) return [];
+
+        var el = row[idx];
         try
         {
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(raw) ?? [];
+            // App Insights may return customDimensions as a JSON object or as a
+            // JSON-encoded string. Handle both, and tolerate non-string values.
+            var json = el.ValueKind switch
+            {
+                JsonValueKind.Object => el.GetRawText(),
+                JsonValueKind.String => el.GetString(),
+                _ => null,
+            };
+            if (string.IsNullOrEmpty(json)) return [];
+
+            var parsed = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
+            if (parsed is null) return [];
+
+            return parsed.ToDictionary(
+                kv => kv.Key,
+                kv => kv.Value.ValueKind == JsonValueKind.String
+                    ? kv.Value.GetString() ?? ""
+                    : kv.Value.GetRawText());
         }
         catch
         {
@@ -177,16 +195,24 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         }
     }
 
-    private static string? TryGetString(string?[] row, Dictionary<string, int> cols, string name)
+    private static string? TryGetString(JsonElement[] row, Dictionary<string, int> cols, string name)
     {
         if (!cols.TryGetValue(name, out var idx) || idx >= row.Length) return null;
-        return row[idx];
+        var el = row[idx];
+        return el.ValueKind switch
+        {
+            JsonValueKind.Null or JsonValueKind.Undefined => null,
+            JsonValueKind.String => el.GetString(),
+            _ => el.GetRawText(),
+        };
     }
 
-    private static int? TryGetInt(string?[] row, Dictionary<string, int> cols, string name)
+    private static int? TryGetInt(JsonElement[] row, Dictionary<string, int> cols, string name)
     {
-        var s = TryGetString(row, cols, name);
-        return int.TryParse(s, out var v) ? v : null;
+        if (!cols.TryGetValue(name, out var idx) || idx >= row.Length) return null;
+        var el = row[idx];
+        if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var n)) return n;
+        return int.TryParse(TryGetString(row, cols, name), out var v) ? v : null;
     }
 
     private static Models.LogLevel MapSeverity(int? level) => level switch
@@ -213,6 +239,6 @@ public record AppInsightsQueryResult(List<AppInsightsTable> Tables);
 public record AppInsightsTable(
     string Name,
     List<AppInsightsColumn> Columns,
-    List<string?[]> Rows);
+    List<JsonElement[]> Rows);
 
 public record AppInsightsColumn(string Name, string Type);

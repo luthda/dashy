@@ -3,6 +3,7 @@ using Dashy.Api.Data;
 using Dashy.Api.Infrastructure;
 using Dashy.Api.Models;
 using Microsoft.EntityFrameworkCore;
+using LogLevel = Dashy.Api.Models.LogLevel;
 
 namespace Dashy.Api.Services;
 
