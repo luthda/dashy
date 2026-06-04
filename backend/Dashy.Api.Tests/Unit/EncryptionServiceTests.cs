@@ -1,5 +1,6 @@
 using Dashy.Api.Infrastructure;
 using Dashy.Api.Options;
+using Dashy.Api.Services;
 using FluentAssertions;
 using MsOptions = Microsoft.Extensions.Options.Options;
 

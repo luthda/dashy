@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Dashy.Api.Data;
 using Dashy.Api.Data.Entities;
-using Dashy.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dashy.Api.Services;
@@ -46,7 +45,10 @@ public class SourceService(
         logger.LogInformation("Updating source {Id}", id);
 
         var source = await db.Sources.FindAsync([id], ct);
-        if (source is null) return null;
+        if (source is null)
+        {
+            return null;
+        }
 
         source.Name = request.Name ?? source.Name;
 
@@ -65,7 +67,10 @@ public class SourceService(
         logger.LogInformation("Deleting source {Id}", id);
 
         var source = await db.Sources.FindAsync([id], ct);
-        if (source is null) return false;
+        if (source is null)
+        {
+            return false;
+        }
 
         db.Sources.Remove(source);
         await db.SaveChangesAsync(ct);
@@ -78,7 +83,9 @@ public class SourceService(
 
         var source = await db.Sources.FindAsync([id], ct);
         if (source is null)
+        {
             return new ConnectionTestResult(false, "Source not found");
+        }
 
         try
         {
@@ -112,4 +119,3 @@ public record UpdateSourceRequest(
     object? Config);
 
 public record AppInsightsConfig(string AppId, string ApiKey);
-public record LokiConfig(string BaseUrl, string? OrgId, string? AuthToken);

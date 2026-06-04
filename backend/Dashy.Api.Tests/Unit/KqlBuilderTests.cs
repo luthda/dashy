@@ -118,7 +118,7 @@ public class KqlBuilderTests
         var kql = AppInsightsAdapter.BuildKql(null, null, TagFilters.Empty, 100,
             eventTypes: [EventType.Exception]);
 
-        kql.Should().Contain("severityLevel = 3");
+        kql.Should().Contain("severityLevel = toint(3)");
         kql.Should().Contain("coalesce(outerMessage, innermostMessage)");
         kql.Should().Contain("exProblemId = problemId");
         kql.Should().Contain("exMethod = method");

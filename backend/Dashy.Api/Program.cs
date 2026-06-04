@@ -17,7 +17,9 @@ if (string.IsNullOrEmpty(encryptionKey))
 {
     var envKey = Environment.GetEnvironmentVariable("ENCRYPTION_KEY");
     if (!string.IsNullOrEmpty(envKey))
+    {
         builder.Configuration["Encryption:Key"] = envKey;
+    }
 }
 
 builder.Services.Configure<EncryptionOptions>(
@@ -37,7 +39,6 @@ builder.Services.AddSingleton<IEncryptionService, AesGcmEncryptionService>();
 
 // ── Log source adapters ──────────────────────────────────────────────────────
 builder.Services.AddHttpClient<AppInsightsAdapter>();
-builder.Services.AddHttpClient<LokiAdapter>();
 builder.Services.AddTransient<ILogSourceAdapterFactory, LogSourceAdapterFactory>();
 
 // ── Services ──────────────────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ builder.Services.AddScoped<LogQueryService>();
 builder.Services.ConfigureHttpJsonOptions(opt =>
 {
     opt.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
-    // Accept/emit enums as their string names (e.g. "AppInsights", "Loki")
+    // Accept/emit enums as their string names (e.g. "AppInsights")
     opt.SerializerOptions.Converters.Add(
         new System.Text.Json.Serialization.JsonStringEnumConverter());
 });

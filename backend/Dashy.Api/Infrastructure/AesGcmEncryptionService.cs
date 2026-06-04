@@ -1,20 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
 using Dashy.Api.Options;
+using Dashy.Api.Services;
 using Microsoft.Extensions.Options;
 
 namespace Dashy.Api.Infrastructure;
 
-public interface IEncryptionService
-{
-    string Encrypt(string plaintext);
-    string Decrypt(string ciphertext);
-}
-
-/// <summary>
-/// AES-256-GCM encryption for sensitive values stored in SQLite.
-/// Output format: Base64(nonce [12 bytes] + tag [16 bytes] + ciphertext).
-/// </summary>
 public sealed class AesGcmEncryptionService : IEncryptionService
 {
     private readonly byte[] _key;
@@ -23,13 +14,17 @@ public sealed class AesGcmEncryptionService : IEncryptionService
     {
         var raw = options.Value.Key;
         if (string.IsNullOrWhiteSpace(raw))
+        {
             throw new InvalidOperationException(
                 "ENCRYPTION_KEY is not set. Set the Encryption:Key config value or the ENCRYPTION__KEY environment variable.");
+        }
 
         _key = Convert.FromBase64String(raw);
         if (_key.Length != 32)
+        {
             throw new InvalidOperationException(
                 $"ENCRYPTION_KEY must be a 32-byte Base64 value (got {_key.Length} bytes).");
+        }
     }
 
     public string Encrypt(string plaintext)
@@ -61,7 +56,9 @@ public sealed class AesGcmEncryptionService : IEncryptionService
         const int tagLen   = 16;
 
         if (raw.Length < nonceLen + tagLen)
+        {
             throw new CryptographicException("Ciphertext is too short.");
+        }
 
         var nonce      = raw[..nonceLen];
         var tag        = raw[nonceLen..(nonceLen + tagLen)];

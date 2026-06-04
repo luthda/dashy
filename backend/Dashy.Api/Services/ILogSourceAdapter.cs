@@ -1,8 +1,7 @@
 using Dashy.Api.Data.Entities;
 using Dashy.Api.Models;
-using Dashy.Api.Services;
 
-namespace Dashy.Api.Infrastructure;
+namespace Dashy.Api.Services;
 
 public interface ILogSourceAdapter
 {

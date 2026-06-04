@@ -43,6 +43,35 @@ Read multiple files if a task spans domains. Only read what you need.
 
 ---
 
+## Coding Conventions
+
+Follow the [Microsoft C# coding conventions](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/coding-conventions) with these additional rules:
+
+- **Always use `var`** for local variable declarations.
+- **Always use braces `{}`** for `if`, `else`, `foreach`, `for`, and `while` bodies — even single-line statements.
+- **No single-line control flow** — the body always goes on the next line inside braces.
+
+```csharp
+// ✅ Correct
+if (source is null)
+{
+    return null;
+}
+
+foreach (var item in items)
+{
+    results.Add(item);
+}
+
+// ❌ Wrong
+if (source is null) return null;
+foreach (var item in items) results.Add(item);
+if (source is null)
+    return null;
+```
+
+---
+
 ## Core Values
 
 - **Readability first** — duplicate code is fine if it makes each case self-contained. Explicit over clever.
@@ -71,6 +100,25 @@ backend/
   Dashy.Api.Tests/            # Test project
   Dashy.sln                   # Solution file
 ```
+
+---
+
+## Layer Architecture (ADR-004)
+
+Pragmatic layered architecture enforced by folder conventions within the single `Dashy.Api` project:
+
+| Layer | Folders | Depends on |
+|---|---|---|
+| **Domain** | `Data/Entities`, `Models` | Nothing — no EF Core, ASP.NET, or HTTP deps |
+| **Application** | `Services` | Domain + infrastructure **interfaces** (`ILogSourceAdapter`, `IEncryptionService`) |
+| **Infrastructure** | `Infrastructure`, `Data` | Application interfaces (implements them) |
+| **Api** | `Endpoints`, `Program.cs` | Everything (DI wiring layer) |
+
+**Boundary rules:**
+- Endpoints never touch `DashyDbContext` directly — always via Application services.
+- Application services depend on infrastructure only through interfaces defined in `Services/`.
+- No repository/unit-of-work abstraction over EF Core (ADR-001 locks in SQLite).
+- `ILogSourceAdapter` is the extension point — adding a new source = one adapter + DI registration.
 
 ---
 

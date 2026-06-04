@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Dashy.Api.Data;
-using Dashy.Api.Infrastructure;
 using Dashy.Api.Models;
 using Microsoft.EntityFrameworkCore;
 using LogLevel = Dashy.Api.Models.LogLevel;
@@ -36,12 +35,23 @@ public class LogQueryService(
             EventTypes: request.EventTypes,
             Skip: request.Skip);
 
-        return await adapter.QueryAsync(adapterRequest, ct);
+        try
+        {
+            return await adapter.QueryAsync(adapterRequest, ct);
+        }
+        catch (Exception ex) when (ex is not SourceNotFoundException)
+        {
+            var (statusCode, body) = ExtractErrorDetails(ex);
+            throw new LogSourceQueryException(statusCode, body, ex);
+        }
     }
 
     private async Task<TagFilters> ResolveTagFiltersAsync(List<Guid> tagIds, CancellationToken ct)
     {
-        if (tagIds.Count == 0) return TagFilters.Empty;
+        if (tagIds.Count == 0)
+        {
+            return TagFilters.Empty;
+        }
 
         var tags = await db.Tags
             .Where(t => tagIds.Contains(t.Id))
@@ -56,16 +66,37 @@ public class LogQueryService(
             try
             {
                 var filters = JsonSerializer.Deserialize<TagFilterJson>(tag.Filters);
-                if (filters is null) continue;
+                if (filters is null)
+                {
+                    continue;
+                }
 
-                foreach (var t in filters.Terms ?? []) terms.Add(t);
-                foreach (var l in filters.Levels ?? []) levels.Add(l);
-                foreach (var e in filters.EventTypes ?? []) eventTypes.Add(e);
+                foreach (var t in filters.Terms ?? [])
+                {
+                    terms.Add(t);
+                }
+
+                foreach (var l in filters.Levels ?? [])
+                {
+                    levels.Add(l);
+                }
+
+                foreach (var e in filters.EventTypes ?? [])
+                {
+                    eventTypes.Add(e);
+                }
             }
             catch { /* malformed tag filter — skip */ }
         }
 
         return new TagFilters(terms.ToList(), levels.ToList(), eventTypes.ToList());
+    }
+
+    private static (int StatusCode, string Body) ExtractErrorDetails(Exception ex)
+    {
+        var statusCode = ex.GetType().GetProperty("StatusCode")?.GetValue(ex) as int? ?? 500;
+        var body = ex.GetType().GetProperty("Body")?.GetValue(ex) as string ?? ex.Message;
+        return (statusCode, body);
     }
 }
 
@@ -98,6 +129,3 @@ internal record TagFilterJson(
     List<string>? Terms,
     List<LogLevel>? Levels,
     List<string>? EventTypes);
-
-public class SourceNotFoundException(Guid id)
-    : Exception($"Source {id} was not found");

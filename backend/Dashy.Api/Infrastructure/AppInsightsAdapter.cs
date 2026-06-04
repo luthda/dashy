@@ -4,6 +4,7 @@ using System.Text.Json;
 using Dashy.Api.Data.Entities;
 using Dashy.Api.Models;
 using Dashy.Api.Services;
+using LogLevel = Dashy.Api.Models.LogLevel;
 
 namespace Dashy.Api.Infrastructure;
 
@@ -121,9 +122,13 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
             .ToList();
 
         if (projections.Count == 1)
+        {
             sb.Append(projections[0]);
+        }
         else
+        {
             sb.Append("union \n  ").Append(string.Join(",\n  ", projections));
+        }
 
         sb.Append("\n| project timestamp, eventType, severityLevel = column_ifexists(\"severityLevel\", 0), eventMessage, customDimensions, ")
           .Append("duration = column_ifexists(\"duration\", 0.0), ")
@@ -139,7 +144,9 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         var clauses = new List<string>();
 
         if (!string.IsNullOrWhiteSpace(freeText))
+        {
             clauses.Add($"eventMessage contains \"{EscapeKql(freeText)}\"");
+        }
 
         if (tags.Levels.Count > 0)
         {
@@ -151,11 +158,15 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
                 .ToList();
 
             if (levelInts.Count > 0)
+            {
                 clauses.Add($"severityLevel in ({string.Join(", ", levelInts)})");
+            }
         }
 
         foreach (var term in tags.Terms)
+        {
             clauses.Add($"eventMessage contains \"{EscapeKql(term)}\"");
+        }
 
         if (timeRange?.Type == "absolute" && timeRange.From.HasValue && timeRange.To.HasValue)
         {
@@ -164,7 +175,9 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         }
 
         if (clauses.Count > 0)
+        {
             sb.Append("\n| where ").Append(string.Join("\n    and ", clauses));
+        }
 
         sb.Append("\n| order by timestamp desc");
         // Each table already contributed at most `limit` rows; cap the merged set
@@ -179,15 +192,25 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         var requestedTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (eventTypes is { Count: > 0 })
+        {
             foreach (var et in eventTypes)
+            {
                 requestedTypes.Add(et);
+            }
+        }
 
         if (tagEventTypes.Count > 0)
+        {
             foreach (var et in tagEventTypes)
+            {
                 requestedTypes.Add(et);
+            }
+        }
 
         if (requestedTypes.Count == 0)
+        {
             return [.. TableProjections.Keys];
+        }
 
         return requestedTypes
             .Where(et => EventTypeToTable.ContainsKey(et))
@@ -200,7 +223,11 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
 
     private static string? ToAppInsightsTimespan(TimeRangeRequest? timeRange)
     {
-        if (timeRange?.Type != "relative") return null;
+        if (timeRange?.Type != "relative")
+        {
+            return null;
+        }
+
         return timeRange.Value switch
         {
             "15m" => "PT15M",
@@ -229,7 +256,9 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
     private static List<LogEntry> MapToLogEntries(AppInsightsQueryResult result, string sourceName)
     {
         if (result.Tables is not [var table, ..])
+        {
             return [];
+        }
 
         var cols = table.Columns
             .Select((c, i) => (c.Name, Index: i))
@@ -239,33 +268,15 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         {
             var dims = ParseCustomDimensions(row, cols);
 
-            // Add event-type-specific properties
-            var duration = TryGetString(row, cols, "duration");
-            if (!string.IsNullOrEmpty(duration)) dims["duration"] = duration;
-
-            var success = TryGetString(row, cols, "success");
-            if (!string.IsNullOrEmpty(success)) dims["success"] = success;
-
-            var resultCode = TryGetString(row, cols, "resultCode");
-            if (!string.IsNullOrEmpty(resultCode)) dims["resultCode"] = resultCode;
-
-            var name = TryGetString(row, cols, "name");
-            if (!string.IsNullOrEmpty(name)) dims["name"] = name;
-
-            var target = TryGetString(row, cols, "target");
-            if (!string.IsNullOrEmpty(target)) dims["target"] = target;
-
-            var problemId = TryGetString(row, cols, "exProblemId");
-            if (!string.IsNullOrEmpty(problemId)) dims["problemId"] = problemId;
-
-            var method = TryGetString(row, cols, "exMethod");
-            if (!string.IsNullOrEmpty(method)) dims["method"] = method;
-
-            var assembly = TryGetString(row, cols, "exAssembly");
-            if (!string.IsNullOrEmpty(assembly)) dims["assembly"] = assembly;
-
-            var innerMsg = TryGetString(row, cols, "exInnermostMessage");
-            if (!string.IsNullOrEmpty(innerMsg)) dims["innermostMessage"] = innerMsg;
+            AddPropertyIfPresent(dims, row, cols, "duration", "duration");
+            AddPropertyIfPresent(dims, row, cols, "success", "success");
+            AddPropertyIfPresent(dims, row, cols, "resultCode", "resultCode");
+            AddPropertyIfPresent(dims, row, cols, "name", "name");
+            AddPropertyIfPresent(dims, row, cols, "target", "target");
+            AddPropertyIfPresent(dims, row, cols, "exProblemId", "problemId");
+            AddPropertyIfPresent(dims, row, cols, "exMethod", "method");
+            AddPropertyIfPresent(dims, row, cols, "exAssembly", "assembly");
+            AddPropertyIfPresent(dims, row, cols, "exInnermostMessage", "innermostMessage");
 
             return new LogEntry(
                 Timestamp: ParseTimestamp(row, cols),
@@ -284,25 +295,43 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         return raw is not null && DateTimeOffset.TryParse(raw, out var ts) ? ts : DateTimeOffset.UtcNow;
     }
 
+    private static void AddPropertyIfPresent(
+        Dictionary<string, string> dims, JsonElement[] row, Dictionary<string, int> cols,
+        string columnName, string propertyName)
+    {
+        var value = TryGetString(row, cols, columnName);
+        if (!string.IsNullOrEmpty(value))
+        {
+            dims[propertyName] = value;
+        }
+    }
+
     private static Dictionary<string, string> ParseCustomDimensions(JsonElement[] row, Dictionary<string, int> cols)
     {
-        if (!cols.TryGetValue("customDimensions", out var idx) || idx >= row.Length) return [];
+        if (!cols.TryGetValue("customDimensions", out var idx) || idx >= row.Length)
+        {
+            return [];
+        }
 
         var el = row[idx];
         try
         {
-            // App Insights may return customDimensions as a JSON object or as a
-            // JSON-encoded string. Handle both, and tolerate non-string values.
             var json = el.ValueKind switch
             {
                 JsonValueKind.Object => el.GetRawText(),
                 JsonValueKind.String => el.GetString(),
                 _ => null,
             };
-            if (string.IsNullOrEmpty(json)) return [];
+            if (string.IsNullOrEmpty(json))
+            {
+                return [];
+            }
 
             var parsed = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json);
-            if (parsed is null) return [];
+            if (parsed is null)
+            {
+                return [];
+            }
 
             return parsed.ToDictionary(
                 kv => kv.Key,
@@ -318,7 +347,11 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
 
     private static string? TryGetString(JsonElement[] row, Dictionary<string, int> cols, string name)
     {
-        if (!cols.TryGetValue(name, out var idx) || idx >= row.Length) return null;
+        if (!cols.TryGetValue(name, out var idx) || idx >= row.Length)
+        {
+            return null;
+        }
+
         var el = row[idx];
         return el.ValueKind switch
         {
@@ -330,9 +363,17 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
 
     private static int? TryGetInt(JsonElement[] row, Dictionary<string, int> cols, string name)
     {
-        if (!cols.TryGetValue(name, out var idx) || idx >= row.Length) return null;
+        if (!cols.TryGetValue(name, out var idx) || idx >= row.Length)
+        {
+            return null;
+        }
+
         var el = row[idx];
-        if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var n)) return n;
+        if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var n))
+        {
+            return n;
+        }
+
         return int.TryParse(TryGetString(row, cols, name), out var v) ? v : null;
     }
 

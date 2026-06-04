@@ -27,16 +27,20 @@ public static class SourceEndpoints
     private static async Task<IResult> Create(CreateSourceRequest request, SourceService svc, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
+        {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
                 { "name", ["Name is required"] }
             });
+        }
 
         if (request.Config is null)
+        {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
                 { "config", ["Config is required"] }
             });
+        }
 
         var source = await svc.CreateAsync(request, ct);
         return Results.Created($"/api/v1/sources/{source.Id}", ToResponse(source));

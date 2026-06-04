@@ -1,4 +1,3 @@
-using Dashy.Api.Infrastructure;
 using Dashy.Api.Models;
 using Dashy.Api.Services;
 
@@ -19,10 +18,12 @@ public static class LogEndpoints
         CancellationToken ct)
     {
         if (request.SourceId == Guid.Empty)
+        {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
                 { "sourceId", ["sourceId is required"] }
             });
+        }
 
         try
         {
@@ -33,23 +34,19 @@ public static class LogEndpoints
         {
             return Results.NotFound(new { error = ex.Message });
         }
-        catch (AppInsightsQueryException ex) when (ex.StatusCode == 400)
+        catch (LogSourceQueryException ex) when (ex.StatusCode == 400)
         {
             return Results.BadRequest(new { error = $"Invalid query: {ex.Body}" });
         }
-        catch (AppInsightsQueryException ex) when (ex.StatusCode == 403)
+        catch (LogSourceQueryException ex) when (ex.StatusCode == 403)
         {
             return Results.Problem(
                 detail: "Check your Application ID and API key (Read telemetry permission required).",
                 statusCode: 403);
         }
-        catch (AppInsightsQueryException ex) when (ex.StatusCode == 429)
+        catch (LogSourceQueryException ex) when (ex.StatusCode == 429)
         {
-            return Results.Problem(detail: "Rate limited by App Insights. Try again shortly.", statusCode: 429);
-        }
-        catch (LokiQueryException ex) when (ex.StatusCode == 400)
-        {
-            return Results.BadRequest(new { error = $"Invalid LogQL: {ex.Body}" });
+            return Results.Problem(detail: "Rate limited. Try again shortly.", statusCode: 429);
         }
     }
 }

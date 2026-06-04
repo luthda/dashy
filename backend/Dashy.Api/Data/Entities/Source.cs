@@ -9,7 +9,6 @@ public class Source
     /// <summary>
     /// Encrypted JSON blob — shape depends on Type.
     /// App Insights: { appId, apiKey }
-    /// Loki: { baseUrl, orgId?, authToken? }
     /// </summary>
     public string Config { get; set; } = "";
 
@@ -19,5 +18,4 @@ public class Source
 public enum SourceType
 {
     AppInsights,
-    Loki,
 }
