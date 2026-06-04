@@ -2,7 +2,7 @@ services:
 
   dashy-api:
     build:
-      context: ./src
+      context: ./backend
       dockerfile: Dashy.Api/Dockerfile
     ports:
       - "8080:8080"
@@ -20,7 +20,7 @@ services:
 
   dashy-web:
     build:
-      context: ./dashy-web
+      context: ./frontend
       dockerfile: Dockerfile
     ports:
       - "3000:80"
