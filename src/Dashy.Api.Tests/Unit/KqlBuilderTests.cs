@@ -89,12 +89,14 @@ public class KqlBuilderTests
     {
         var kql = AppInsightsAdapter.BuildKql(null, null, TagFilters.Empty, 100);
 
-        kql.Should().Contain("| project timestamp, eventType, severityLevel, eventMessage, customDimensions");
+        kql.Should().Contain("| project timestamp, eventType, severityLevel = column_ifexists(\"severityLevel\", 0), eventMessage, customDimensions");
         kql.Should().Contain("column_ifexists(\"duration\"");
         kql.Should().Contain("column_ifexists(\"success\"");
         kql.Should().Contain("column_ifexists(\"resultCode\"");
         kql.Should().Contain("column_ifexists(\"name\"");
         kql.Should().Contain("column_ifexists(\"target\"");
+        kql.Should().Contain("column_ifexists(\"exProblemId\"");
+        kql.Should().Contain("column_ifexists(\"exMethod\"");
     }
 
     [Fact]
@@ -108,6 +110,18 @@ public class KqlBuilderTests
 
         kql.Should().Contain("timestamp >= datetime(");
         kql.Should().Contain("timestamp <= datetime(");
+    }
+
+    [Fact]
+    public void BuildKql_ExceptionTable_ExtendsSeverityAndExceptionFields()
+    {
+        var kql = AppInsightsAdapter.BuildKql(null, null, TagFilters.Empty, 100,
+            eventTypes: [EventType.Exception]);
+
+        kql.Should().Contain("severityLevel = 3");
+        kql.Should().Contain("coalesce(outerMessage, innermostMessage)");
+        kql.Should().Contain("exProblemId = problemId");
+        kql.Should().Contain("exMethod = method");
     }
 
     [Fact]

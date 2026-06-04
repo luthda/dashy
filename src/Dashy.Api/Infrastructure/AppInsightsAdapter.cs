@@ -68,9 +68,9 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         ["traces"] = "(traces | extend eventType = \"trace\", eventMessage = message)",
         ["requests"] = "(requests | extend eventType = \"request\", eventMessage = strcat(name, \" \", resultCode, \" \", duration, \"ms\"))",
         ["dependencies"] = "(dependencies | extend eventType = \"dependency\", eventMessage = strcat(name, \" \", target, \" \", duration, \"ms \", \"success=\", success))",
-        ["exceptions"] = "(exceptions | extend eventType = \"exception\", eventMessage = strcat(type, \": \", outerMessage))",
+        ["exceptions"] = "(exceptions | extend eventType = \"exception\", eventMessage = strcat(type, \": \", coalesce(outerMessage, innermostMessage)), severityLevel = 3, exProblemId = problemId, exMethod = method, exAssembly = assembly, exInnermostMessage = innermostMessage)",
         ["customEvents"] = "(customEvents | extend eventType = \"customEvent\", eventMessage = name)",
-        ["availabilityResults"] = "(availabilityResults | extend eventType = \"availability\", eventMessage = strcat(name, \" \", success))",
+        ["availabilityResults"] = "(availabilityResults | extend eventType = \"availability\", eventMessage = strcat(name, \" \", success), severityLevel = iff(success == \"True\", 1, 3))",
         ["pageViews"] = "(pageViews | extend eventType = \"pageView\", eventMessage = strcat(name, \" \", duration, \"ms\"))",
     };
 
@@ -100,12 +100,16 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         else
             sb.Append("union \n  ").Append(string.Join(",\n  ", projections));
 
-        sb.Append("\n| project timestamp, eventType, severityLevel, eventMessage, customDimensions, ")
+        sb.Append("\n| project timestamp, eventType, severityLevel = column_ifexists(\"severityLevel\", 0), eventMessage, customDimensions, ")
           .Append("duration = column_ifexists(\"duration\", 0.0), ")
           .Append("success = column_ifexists(\"success\", \"\"), ")
           .Append("resultCode = column_ifexists(\"resultCode\", \"\"), ")
           .Append("name = column_ifexists(\"name\", \"\"), ")
-          .Append("target = column_ifexists(\"target\", \"\")");
+          .Append("target = column_ifexists(\"target\", \"\"), ")
+          .Append("exProblemId = column_ifexists(\"exProblemId\", \"\"), ")
+          .Append("exMethod = column_ifexists(\"exMethod\", \"\"), ")
+          .Append("exAssembly = column_ifexists(\"exAssembly\", \"\"), ")
+          .Append("exInnermostMessage = column_ifexists(\"exInnermostMessage\", \"\")");
 
         var clauses = new List<string>();
 
@@ -223,6 +227,18 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
 
             var target = TryGetString(row, cols, "target");
             if (!string.IsNullOrEmpty(target)) dims["target"] = target;
+
+            var problemId = TryGetString(row, cols, "exProblemId");
+            if (!string.IsNullOrEmpty(problemId)) dims["problemId"] = problemId;
+
+            var method = TryGetString(row, cols, "exMethod");
+            if (!string.IsNullOrEmpty(method)) dims["method"] = method;
+
+            var assembly = TryGetString(row, cols, "exAssembly");
+            if (!string.IsNullOrEmpty(assembly)) dims["assembly"] = assembly;
+
+            var innerMsg = TryGetString(row, cols, "exInnermostMessage");
+            if (!string.IsNullOrEmpty(innerMsg)) dims["innermostMessage"] = innerMsg;
 
             return new LogEntry(
                 Timestamp: ParseTimestamp(row, cols),
