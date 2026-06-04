@@ -2,7 +2,7 @@
 
 > Design doc: `docs/design/dashy-core.md`
 > Mockups: `docs/mockups/dashy/`
-> Status: Draft
+> Status: Phase 0–2 complete
 
 ## Summary
 
@@ -17,44 +17,44 @@ Dashy Core delivers the end-to-end log investigation workflow: connect a source,
 Bootstrap both projects, Docker Compose, and the database schema foundation.
 _Depends on: nothing_
 
-- [ ] `/backend-engineer` — Scaffold .NET 10 Web API project (`src/Dashy.Api/`): `Program.cs` with minimal API setup, EF Core + Npgsql registration, global exception handler (`IExceptionHandler` → `ProblemDetails`), options pattern for `DatabaseOptions` and `EncryptionOptions`
-- [ ] `/backend-engineer` — Scaffold test project (`src/Dashy.Api.Tests/`): xUnit, `DashyWebApplicationFactory` with Testcontainers PostgreSQL, FluentAssertions
-- [ ] `/frontend-engineer` — Scaffold React Vite project (`src/dashy-web/`): TypeScript strict, Tailwind CSS v4, shadcn/ui init, React Router v7, TanStack Query v5 provider, `lib/api.ts` typed fetch client
-- [ ] `/backend-engineer` — Create Docker Compose file: `postgres` (v17), `dashy-api` (.NET), `dashy-web` (Nginx), shared network, volume for PostgreSQL data
-- [ ] `/backend-engineer` — Implement `IEncryptionService` (AES-256-GCM, key from `ENCRYPTION_KEY` env var) with unit tests
+- [x] `/backend-engineer` — Scaffold .NET 10 Web API project (`src/Dashy.Api/`): `Program.cs` with minimal API setup, EF Core + Npgsql registration, global exception handler (`IExceptionHandler` → `ProblemDetails`), options pattern for `DatabaseOptions` and `EncryptionOptions`
+- [x] `/backend-engineer` — Scaffold test project (`src/Dashy.Api.Tests/`): xUnit, `DashyWebApplicationFactory` with Testcontainers PostgreSQL, FluentAssertions
+- [x] `/frontend-engineer` — Scaffold React Vite project (`src/dashy-web/`): TypeScript strict, Tailwind CSS v4, shadcn/ui init, React Router v7, TanStack Query v5 provider, `lib/api.ts` typed fetch client
+- [x] `/backend-engineer` — Create Docker Compose file: `postgres` (v17), `dashy-api` (.NET), `dashy-web` (Nginx), shared network, volume for PostgreSQL data
+- [x] `/backend-engineer` — Implement `IEncryptionService` (AES-256-GCM, key from `ENCRYPTION_KEY` env var) with unit tests
 
 ### Phase 1 — Sources
 
 Connect a log source, test the connection, manage sources. Enables the first-run journey.
 _Depends on: Phase 0_
 
-- [ ] `/backend-engineer` — EF Core migration `CreateSourcesTable`: `sources` table with UUID PK, `name`, `type` (enum → string), `config` (text, encrypted), `created_at` (default `now()`)
-- [ ] `/backend-engineer` — `Source` entity, `SourceConfiguration`, `SourceService` (CRUD + encrypt/decrypt config), `SourceEndpoints` (GET, POST, PUT, DELETE `/api/v1/sources`)
-- [ ] `/backend-engineer` — App Insights query client: HTTP client calling `api.applicationinsights.io/v1/apps/{appId}/query`, maps response to `LogEntry[]`
-- [ ] `/backend-engineer` — Loki query client: HTTP client calling Loki HTTP API with LogQL, maps response to `LogEntry[]`
-- [ ] `/backend-engineer` — `POST /api/v1/sources/{id}/test` endpoint: decrypts config, calls the source, returns `{ ok, error? }`
-- [ ] `/backend-engineer` — Integration tests for source CRUD and connection test endpoints
-- [ ] `/frontend-engineer` — AppShell layout with collapsible sidebar and topbar (mockup: `shell.jsx#Sidebar`, `shell.jsx#Topbar`) — nav items: Logs, Metrics (shell), Traces (shell), Alerts, Settings
-- [ ] `/frontend-engineer` — React Router setup: `/` → redirect to `/logs`, lazy-loaded page routes
-- [ ] `/frontend-engineer` — Source query/mutation hooks: `useSourcesQuery`, `useCreateSource`, `useUpdateSource`, `useDeleteSource`, `useTestConnection`
-- [ ] `/frontend-engineer` — SourceSetupDialog with react-hook-form + zod: type selector (App Insights / Loki), conditional credential fields, test connection button (mockup: `data.jsx#SOURCES` for source types)
-- [ ] `/frontend-engineer` — Settings page: source list with status, add/edit/delete actions
-- [ ] `/frontend-engineer` — First-run empty state on Logs page: "Connect a source" prompt linking to SourceSetupDialog
+- [x] `/backend-engineer` — EF Core migration `CreateSourcesTable`: `sources` table with UUID PK, `name`, `type` (enum → string), `config` (text, encrypted), `created_at` (default `now()`)
+- [x] `/backend-engineer` — `Source` entity, `SourceConfiguration`, `SourceService` (CRUD + encrypt/decrypt config), `SourceEndpoints` (GET, POST, PUT, DELETE `/api/v1/sources`)
+- [x] `/backend-engineer` — App Insights query client: HTTP client calling `api.applicationinsights.io/v1/apps/{appId}/query`, maps response to `LogEntry[]`
+- [x] `/backend-engineer` — Loki query client: HTTP client calling Loki HTTP API with LogQL, maps response to `LogEntry[]`
+- [x] `/backend-engineer` — `POST /api/v1/sources/{id}/test` endpoint: decrypts config, calls the source, returns `{ ok, error? }`
+- [x] `/backend-engineer` — Integration tests for source CRUD and connection test endpoints
+- [x] `/frontend-engineer` — AppShell layout with collapsible sidebar and topbar (mockup: `shell.jsx#Sidebar`, `shell.jsx#Topbar`) — nav items: Logs, Metrics (shell), Traces (shell), Alerts, Settings
+- [x] `/frontend-engineer` — React Router setup: `/` → redirect to `/logs`, lazy-loaded page routes
+- [x] `/frontend-engineer` — Source query/mutation hooks: `useSourcesQuery`, `useCreateSource`, `useUpdateSource`, `useDeleteSource`, `useTestConnection`
+- [x] `/frontend-engineer` — SourceSetupDialog with react-hook-form + zod: type selector (App Insights / Loki), conditional credential fields, test connection button (mockup: `data.jsx#SOURCES` for source types)
+- [x] `/frontend-engineer` — Settings page: source list with status, add/edit/delete actions
+- [x] `/frontend-engineer` — First-run empty state on Logs page: "Connect a source" prompt linking to SourceSetupDialog
 
 ### Phase 2 — Log Query & Display
 
 Query logs through the API proxy and display results. The core investigation workflow.
 _Depends on: Phase 1_
 
-- [ ] `/backend-engineer` — `LogEntry` record, `LogQueryService` (dispatches to App Insights or Loki client based on source type), `POST /api/v1/logs/query` endpoint accepting `{ sourceId, query, tagIds, timeRange, limit }`
-- [ ] `/backend-engineer` — Log normalisation: App Insights `severityLevel` → level, `customDimensions` → properties; Loki stream labels → properties, `level` label → level
-- [ ] `/backend-engineer` — Integration tests for log query endpoint (mock external HTTP via `IHttpClientFactory`)
-- [ ] `/frontend-engineer` — `useLogQuery` hook wrapping `POST /logs/query` with TanStack Query (enabled only when params are set)
-- [ ] `/frontend-engineer` — LogsPage layout: search bar, time range picker (15m / 1h / 6h / 24h / 7d), refresh button, live toggle placeholder (mockup: `logs.jsx#LogsPage` controls section)
-- [ ] `/frontend-engineer` — Stacked severity histogram: bar chart of log counts bucketed by time, colour-coded by level (mockup: `charts.jsx#StackedHistogram`)
-- [ ] `/frontend-engineer` — Level filter chips: toggle individual severity levels to filter displayed results (mockup: `logs.jsx` level toggle buttons)
-- [ ] `/frontend-engineer` — LogTable with expandable rows: timestamp, level badge (colour-coded), message, source; expanded view shows eventType + properties key-value grid (mockup: `logs.jsx#LogStream`, `logs.jsx#LogLine`)
-- [ ] `/frontend-engineer` — Skeleton loading state for table (8 rows), empty state ("No results — try widening the time range"), inline error banner for source errors
+- [x] `/backend-engineer` — `LogEntry` record, `LogQueryService` (dispatches to App Insights or Loki client based on source type), `POST /api/v1/logs/query` endpoint accepting `{ sourceId, query, tagIds, timeRange, limit }`
+- [x] `/backend-engineer` — Log normalisation: App Insights `severityLevel` → level, `customDimensions` → properties; Loki stream labels → properties, `level` label → level
+- [x] `/backend-engineer` — Integration tests for log query endpoint (mock external HTTP via `IHttpClientFactory`)
+- [x] `/frontend-engineer` — `useLogQuery` hook wrapping `POST /logs/query` with TanStack Query (enabled only when params are set)
+- [x] `/frontend-engineer` — LogsPage layout: search bar, time range picker (15m / 1h / 6h / 24h / 7d), refresh button, live toggle placeholder (mockup: `logs.jsx#LogsPage` controls section)
+- [x] `/frontend-engineer` — Stacked severity histogram: bar chart of log counts bucketed by time, colour-coded by level (mockup: `charts.jsx#StackedHistogram`)
+- [x] `/frontend-engineer` — Level filter chips: toggle individual severity levels to filter displayed results (mockup: `logs.jsx` level toggle buttons)
+- [x] `/frontend-engineer` — LogTable with expandable rows: timestamp, level badge (colour-coded), message, source; expanded view shows eventType + properties key-value grid (mockup: `logs.jsx#LogStream`, `logs.jsx#LogLine`)
+- [x] `/frontend-engineer` — Skeleton loading state for table (8 rows), empty state ("No results — try widening the time range"), inline error banner for source errors
 
 ### Phase 3 — Tags
 
