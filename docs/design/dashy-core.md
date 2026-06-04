@@ -101,17 +101,19 @@ Metrics page (UI shell, no data), Traces page (UI shell, no data), live log stre
              │ REST / JSON
 ┌────────────▼─────────────────┐
 │  .NET 10 Web API             │  Port 8080
-│  ├─ Query proxy controller   │  Calls App Insights / Loki
+│  ├─ Query proxy controller   │  Calls App Insights / Loki (bypasses CORS)
 │  ├─ Config API (CRUD)        │  Sources, tags, saved searches, alerts
 │  └─ Alert background service │  IHostedService, polls on schedule
 └────────────┬─────────────────┘
              │ EF Core
 ┌────────────▼─────────────────┐
-│  PostgreSQL (Docker)         │
+│  SQLite (file, Docker volume)│
 └──────────────────────────────┘
 ```
 
-API keys for log sources are stored in PostgreSQL (encrypted at rest via a symmetric key held in .NET configuration / environment variable), never returned to the browser.
+The .NET API proxies all log source calls primarily to bypass **CORS** — neither `api.applicationinsights.io` nor a typical Loki deployment accepts browser-origin requests. A secondary benefit is that API keys are held server-side and never appear in browser network traffic. See ADR-002.
+
+The database is SQLite (not PostgreSQL) — a single `.db` file mounted as a Docker volume. No Postgres container is needed. See ADR-001.
 
 ---
 
