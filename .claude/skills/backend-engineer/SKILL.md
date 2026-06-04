@@ -1,6 +1,6 @@
 ---
 name: backend-engineer
-description: Use when implementing any backend feature, endpoint, service, migration, or test in the .NET 10 + EF Core + PostgreSQL backend. Routes to focused reference files for domain-specific patterns.
+description: Use when implementing any backend feature, endpoint, service, migration, or test in the .NET 10 + EF Core + SQLite backend. Routes to focused reference files for domain-specific patterns.
 ---
 
 # Backend Engineer
@@ -18,6 +18,7 @@ pattern in this document and note the assumption.
 | REST endpoints, error handling, DTOs, validation | `controllers.md` |
 | Background services, alert polling, scheduled work | `background-services.md` |
 | Tests, WebApplicationFactory, integration/unit testing | `testing.md` |
+| Querying Azure App Insights (KQL, API key auth, response mapping) | `app-insights-api.md` |
 
 Read multiple files if a task spans domains. Only read what you need.
 
@@ -29,16 +30,16 @@ Read multiple files if a task spans domains. Only read what you need.
 |---|---|
 | Language | C# 14 |
 | Framework | .NET 10, ASP.NET Core Web API (minimal APIs) |
-| Data access | EF Core (Npgsql provider) |
-| Database | PostgreSQL (Docker, local dev) |
+| Data access | EF Core (SQLite provider — `Microsoft.EntityFrameworkCore.Sqlite`) |
+| Database | SQLite (file, mounted as Docker volume) |
 | Models | Records for DTOs, classes for EF entities |
 | Auth | None — single-user local application |
 | JSON | System.Text.Json, `camelCase` globally (default) |
 | Migrations | EF Core code-first migrations |
 | Background jobs | `IHostedService` / `BackgroundService` with `PeriodicTimer` |
 | Real-time | Server-Sent Events (SSE) |
-| Testing | xUnit, `WebApplicationFactory<Program>`, Testcontainers (PostgreSQL) |
-| Infra | Docker Compose (`postgres`, `dashy-api`, `dashy-web`) |
+| Testing | xUnit, `WebApplicationFactory<Program>`, in-memory SQLite for tests |
+| Infra | Docker Compose (`dashy-api`, `dashy-web`) — no separate DB container |
 
 ---
 
@@ -94,9 +95,19 @@ builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(Dat
 ## Security
 
 - Single-user application — no authentication or authorization middleware.
-- API keys for log sources are encrypted at rest in PostgreSQL using AES-256-GCM.
+- API keys for log sources are encrypted at rest in the SQLite database using AES-256-GCM.
 - Encryption key held in environment variable (`ENCRYPTION_KEY`), never checked into source.
 - Source credentials are never returned to the browser — API responses omit or mask them.
+
+### App Insights authentication (API key method)
+
+Dashy authenticates to the App Insights query API using an **API key + Application ID** — not a connection string, not OAuth.
+
+- The user generates an API key in: Azure Portal → App Insights resource → Configure → API Access → Create API key (Read telemetry permission only)
+- The **Application ID** (a GUID) is also on that page — it is NOT the Instrumentation Key
+- Dashy stores both encrypted in the `sources.config` JSONB column: `{ "appId": "...", "apiKey": "..." }`
+- Every query request sends: `X-Api-Key: <apiKey>` header to `https://api.applicationinsights.io/v1/apps/{appId}/query`
+- See `app-insights-api.md` for the full query API reference, KQL examples, and response mapping
 
 ---
 
@@ -104,10 +115,11 @@ builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(Dat
 
 - Every schema change = a new EF Core migration. Never edit an existing migration.
 - Generate via: `dotnet ef migrations add <DescriptiveName>`
-- `snake_case` column and table names (configured via `NpgsqlSnakeCaseNameTranslator` or explicit `.ToTable()` / `.HasColumnName()` in entity config).
-- Always include `CreatedAt` (`timestamptz`, default `now()`) on new entities.
-- UUIDs as primary keys: `Guid` type, `DEFAULT gen_random_uuid()` in PostgreSQL.
+- `snake_case` column and table names via explicit `.ToTable()` / `.HasColumnName()` in entity config (SQLite has no automatic name translator).
+- Always include `CreatedAt` (default `DateTime.UtcNow`) on new entities.
+- UUIDs as primary keys: `Guid` type, generated in application code (`Guid.NewGuid()`) — SQLite has no `gen_random_uuid()`.
 - Column defaults and constraints defined in `IEntityTypeConfiguration<T>`, not on the entity class.
+- SQLite does not support `ALTER COLUMN` — destructive column changes require a table rebuild migration.
 
 ---
 
