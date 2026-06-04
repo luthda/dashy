@@ -32,7 +32,9 @@ public class LogQueryService(
             FreeText: request.Query,
             TimeRange: request.TimeRange,
             TagFilters: tagFilters,
-            Limit: request.Limit ?? DefaultLimit);
+            Limit: request.Limit ?? DefaultLimit,
+            EventTypes: request.EventTypes,
+            Skip: request.Skip);
 
         return await adapter.QueryAsync(adapterRequest, ct);
     }
@@ -74,7 +76,9 @@ public record LogQueryRequest(
     string? Query,
     List<Guid>? TagIds,
     TimeRangeRequest? TimeRange,
-    int? Limit);
+    int? Limit,
+    List<string>? EventTypes = null,
+    int? Skip = null);
 
 public record TimeRangeRequest(
     string Type,

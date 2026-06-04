@@ -1,4 +1,5 @@
 using Dashy.Api.Infrastructure;
+using Dashy.Api.Models;
 using Dashy.Api.Services;
 
 namespace Dashy.Api.Endpoints;
@@ -26,7 +27,7 @@ public static class LogEndpoints
         try
         {
             var entries = await svc.QueryAsync(request, ct);
-            return Results.Ok(entries);
+            return Results.Ok(new LogQueryResponse(entries, entries.Count));
         }
         catch (SourceNotFoundException ex)
         {
@@ -52,3 +53,5 @@ public static class LogEndpoints
         }
     }
 }
+
+public record LogQueryResponse(List<LogEntry> Entries, int TotalCount);

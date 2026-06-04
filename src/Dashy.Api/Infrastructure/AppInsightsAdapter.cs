@@ -18,7 +18,7 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         var cfg = JsonSerializer.Deserialize<AppInsightsConfig>(request.ConfigJson, JsonSerializerOptions.Web)
             ?? throw new InvalidOperationException("Invalid App Insights config");
 
-        var kql = BuildKql(request.FreeText, request.TimeRange, request.TagFilters, request.Limit);
+        var kql = BuildKql(request.FreeText, request.TimeRange, request.TagFilters, request.Limit, request.EventTypes);
         var timespan = ToAppInsightsTimespan(request.TimeRange);
 
         logger.LogDebug("App Insights KQL: {Kql}", kql);
@@ -31,7 +31,9 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         var cfg = JsonSerializer.Deserialize<AppInsightsConfig>(configJson, JsonSerializerOptions.Web)
             ?? throw new InvalidOperationException("Invalid App Insights config");
 
-        await ExecuteQueryAsync(cfg.AppId, cfg.ApiKey, "traces | limit 1", null, sourceName, ct);
+        await ExecuteQueryAsync(cfg.AppId, cfg.ApiKey,
+            "union (traces | extend eventType = \"trace\", eventMessage = message) | project timestamp, eventType, eventMessage | limit 1",
+            null, sourceName, ct);
     }
 
     private async Task<List<LogEntry>> ExecuteQueryAsync(
@@ -61,14 +63,54 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
 
     // ── KQL builder ──────────────────────────────────────────────────────────
 
-    public static string BuildKql(
-        string? freeText, TimeRangeRequest? timeRange, TagFilters tags, int limit)
+    private static readonly Dictionary<string, string> TableProjections = new()
     {
-        var sb = new StringBuilder("traces");
+        ["traces"] = "(traces | extend eventType = \"trace\", eventMessage = message)",
+        ["requests"] = "(requests | extend eventType = \"request\", eventMessage = strcat(name, \" \", resultCode, \" \", duration, \"ms\"))",
+        ["dependencies"] = "(dependencies | extend eventType = \"dependency\", eventMessage = strcat(name, \" \", target, \" \", duration, \"ms \", \"success=\", success))",
+        ["exceptions"] = "(exceptions | extend eventType = \"exception\", eventMessage = strcat(type, \": \", outerMessage))",
+        ["customEvents"] = "(customEvents | extend eventType = \"customEvent\", eventMessage = name)",
+        ["availabilityResults"] = "(availabilityResults | extend eventType = \"availability\", eventMessage = strcat(name, \" \", success))",
+        ["pageViews"] = "(pageViews | extend eventType = \"pageView\", eventMessage = strcat(name, \" \", duration, \"ms\"))",
+    };
+
+    private static readonly Dictionary<string, string> EventTypeToTable = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [Models.EventType.Trace] = "traces",
+        [Models.EventType.Request] = "requests",
+        [Models.EventType.Dependency] = "dependencies",
+        [Models.EventType.Exception] = "exceptions",
+        [Models.EventType.CustomEvent] = "customEvents",
+        [Models.EventType.Availability] = "availabilityResults",
+        [Models.EventType.PageView] = "pageViews",
+    };
+
+    public static string BuildKql(
+        string? freeText, TimeRangeRequest? timeRange, TagFilters tags, int limit,
+        List<string>? eventTypes = null)
+    {
+        var sb = new StringBuilder();
+
+        // Determine which tables to include
+        var tables = ResolveTableNames(eventTypes, tags.EventTypes);
+        var projections = tables.Select(t => TableProjections[t]).ToList();
+
+        if (projections.Count == 1)
+            sb.Append(projections[0]);
+        else
+            sb.Append("union \n  ").Append(string.Join(",\n  ", projections));
+
+        sb.Append("\n| project timestamp, eventType, severityLevel, eventMessage, customDimensions, ")
+          .Append("duration = column_ifexists(\"duration\", 0.0), ")
+          .Append("success = column_ifexists(\"success\", \"\"), ")
+          .Append("resultCode = column_ifexists(\"resultCode\", \"\"), ")
+          .Append("name = column_ifexists(\"name\", \"\"), ")
+          .Append("target = column_ifexists(\"target\", \"\")");
+
         var clauses = new List<string>();
 
         if (!string.IsNullOrWhiteSpace(freeText))
-            clauses.Add($"message contains \"{EscapeKql(freeText)}\"");
+            clauses.Add($"eventMessage contains \"{EscapeKql(freeText)}\"");
 
         if (tags.Levels.Count > 0)
         {
@@ -83,11 +125,8 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
                 clauses.Add($"severityLevel in ({string.Join(", ", levelInts)})");
         }
 
-        foreach (var et in tags.EventTypes)
-            clauses.Add($"customDimensions[\"EventType\"] == \"{EscapeKql(et)}\"");
-
         foreach (var term in tags.Terms)
-            clauses.Add($"message contains \"{EscapeKql(term)}\"");
+            clauses.Add($"eventMessage contains \"{EscapeKql(term)}\"");
 
         if (timeRange?.Type == "absolute" && timeRange.From.HasValue && timeRange.To.HasValue)
         {
@@ -102,6 +141,30 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         sb.Append($"\n| limit {limit}");
 
         return sb.ToString();
+    }
+
+    private static List<string> ResolveTableNames(List<string>? eventTypes, List<string> tagEventTypes)
+    {
+        var requestedTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (eventTypes is { Count: > 0 })
+            foreach (var et in eventTypes)
+                requestedTypes.Add(et);
+
+        if (tagEventTypes.Count > 0)
+            foreach (var et in tagEventTypes)
+                requestedTypes.Add(et);
+
+        if (requestedTypes.Count == 0)
+            return [.. TableProjections.Keys];
+
+        return requestedTypes
+            .Where(et => EventTypeToTable.ContainsKey(et))
+            .Select(et => EventTypeToTable[et])
+            .Distinct()
+            .ToList() is { Count: > 0 } resolved
+                ? resolved
+                : [.. TableProjections.Keys];
     }
 
     private static string? ToAppInsightsTimespan(TimeRangeRequest? timeRange)
@@ -144,14 +207,29 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         return table.Rows.Select(row =>
         {
             var dims = ParseCustomDimensions(row, cols);
+
+            // Add event-type-specific properties
+            var duration = TryGetString(row, cols, "duration");
+            if (!string.IsNullOrEmpty(duration)) dims["duration"] = duration;
+
+            var success = TryGetString(row, cols, "success");
+            if (!string.IsNullOrEmpty(success)) dims["success"] = success;
+
+            var resultCode = TryGetString(row, cols, "resultCode");
+            if (!string.IsNullOrEmpty(resultCode)) dims["resultCode"] = resultCode;
+
+            var name = TryGetString(row, cols, "name");
+            if (!string.IsNullOrEmpty(name)) dims["name"] = name;
+
+            var target = TryGetString(row, cols, "target");
+            if (!string.IsNullOrEmpty(target)) dims["target"] = target;
+
             return new LogEntry(
                 Timestamp: ParseTimestamp(row, cols),
                 Level: MapSeverity(TryGetInt(row, cols, "severityLevel")),
-                Message: TryGetString(row, cols, "message")
-                         ?? TryGetString(row, cols, "outerMessage")
-                         ?? "",
+                Message: TryGetString(row, cols, "eventMessage") ?? "",
                 Source: sourceName,
-                EventType: dims.GetValueOrDefault("EventType"),
+                EventType: TryGetString(row, cols, "eventType"),
                 Properties: dims
             );
         }).ToList();

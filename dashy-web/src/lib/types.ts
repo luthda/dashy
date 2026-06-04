@@ -24,7 +24,7 @@ export interface LogEntry {
   level: "error" | "warn" | "info" | "debug" | "trace"
   message: string
   source: string
-  eventType?: string
+  eventType: string
   properties: Record<string, string>
 }
 
@@ -32,8 +32,10 @@ export interface LogQueryRequest {
   sourceId: string
   query?: string
   tagIds?: string[]
+  eventTypes?: string[]
   timeRange?: TimeRange
   limit?: number
+  skip?: number
 }
 
 export interface TimeRange {
@@ -67,6 +69,18 @@ export const LEVELS = [
 ] as const
 
 export type Level = (typeof LEVELS)[number]["id"]
+
+export const EVENT_TYPES = [
+  { id: "trace" as const, label: "Trace", color: "var(--evt-trace)" },
+  { id: "request" as const, label: "Request", color: "var(--evt-request)" },
+  { id: "dependency" as const, label: "Dependency", color: "var(--evt-dependency)" },
+  { id: "exception" as const, label: "Exception", color: "var(--evt-exception)" },
+  { id: "customEvent" as const, label: "Custom Event", color: "var(--evt-custom)" },
+  { id: "availability" as const, label: "Availability", color: "var(--evt-availability)" },
+  { id: "pageView" as const, label: "Page View", color: "var(--evt-pageview)" },
+] as const
+
+export type EventTypeId = (typeof EVENT_TYPES)[number]["id"]
 
 export const RANGES = ["15m", "1h", "6h", "24h", "7d"] as const
 export type Range = (typeof RANGES)[number]

@@ -17,7 +17,9 @@ public record AdapterQueryRequest(
     string? FreeText,
     TimeRangeRequest? TimeRange,
     TagFilters TagFilters,
-    int Limit);
+    int Limit,
+    List<string>? EventTypes = null,
+    int? Skip = null);
 
 public interface ILogSourceAdapterFactory
 {

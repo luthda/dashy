@@ -33,6 +33,15 @@
   --color-sev-debug:   var(--sev-debug);
   --color-sev-trace:   var(--sev-trace);
 
+  /* Event type colours */
+  --color-evt-trace:        var(--evt-trace);
+  --color-evt-request:      var(--evt-request);
+  --color-evt-dependency:   var(--evt-dependency);
+  --color-evt-exception:    var(--evt-exception);
+  --color-evt-custom:       var(--evt-custom);
+  --color-evt-availability: var(--evt-availability);
+  --color-evt-pageview:     var(--evt-pageview);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -69,6 +78,14 @@
   --sev-info:   oklch(0.6 0.18 245);
   --sev-debug:  oklch(0.65 0.14 290);
   --sev-trace:  oklch(0.6 0.01 260);
+
+  --evt-trace:        oklch(0.65 0.19 155);
+  --evt-request:      oklch(0.6 0.18 245);
+  --evt-dependency:   oklch(0.78 0.17 85);
+  --evt-exception:    oklch(0.62 0.22 27);
+  --evt-custom:       oklch(0.6 0.18 295);
+  --evt-availability: oklch(0.7 0.14 200);
+  --evt-pageview:     oklch(0.72 0.18 50);
 }
 
 .dark {
@@ -99,6 +116,14 @@
   --sev-info:   oklch(0.7 0.16 245);
   --sev-debug:  oklch(0.72 0.12 290);
   --sev-trace:  oklch(0.6 0.01 260);
+
+  --evt-trace:        oklch(0.72 0.17 155);
+  --evt-request:      oklch(0.7 0.16 245);
+  --evt-dependency:   oklch(0.82 0.15 85);
+  --evt-exception:    oklch(0.7 0.2 27);
+  --evt-custom:       oklch(0.7 0.16 295);
+  --evt-availability: oklch(0.75 0.12 200);
+  --evt-pageview:     oklch(0.78 0.16 50);
 }
 
 * {
