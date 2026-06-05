@@ -54,10 +54,11 @@ export function LogsPage() {
 
   const prevSourceId = useRef(sourceId)
   const prevRange = useRef(range)
+  const prevTagIds = useRef(activeTagIds)
   useEffect(() => {
     if (!sourceId) return
-    if (prevSourceId.current !== sourceId || prevRange.current !== range) {
-      prevSourceId.current = sourceId; prevRange.current = range; setPage(0); runQuery(0)
+    if (prevSourceId.current !== sourceId || prevRange.current !== range || prevTagIds.current !== activeTagIds) {
+      prevSourceId.current = sourceId; prevRange.current = range; prevTagIds.current = activeTagIds; setPage(0); runQuery(0)
     }
   })
 
