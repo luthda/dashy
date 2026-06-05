@@ -61,10 +61,15 @@ _Depends on: Phase 1_
 Define reusable filter combinations as tag chips. Enhances the log investigation workflow.
 _Depends on: Phase 2_
 
-- [ ] `/backend-engineer` — EF Core migration `CreateTagsTable`: `tags` table with UUID PK, `name`, `color`, `filters` (JSONB via `OwnsOne` + `ToJson`), `created_at`
-- [ ] `/backend-engineer` — `Tag` entity, `TagConfiguration`, `TagService` (CRUD), `TagEndpoints` (GET, POST, PUT, DELETE `/api/v1/tags`)
-- [ ] `/backend-engineer` — Integrate tag filters into `LogQueryService`: resolve `tagIds` → merge terms/levels/eventTypes into the query
-- [ ] `/backend-engineer` — Integration tests for tag CRUD and tag-filtered log queries
+> **Architecture note (ADR-004):** Tag entity lives in `Domain/Entities/`, service in
+> `Application/Services/`, endpoints in `Controllers/`, EF config in
+> `Infrastructure/Persistence/Configurations/`. Services use `DashyDbContext` directly
+> (no repository abstraction).
+
+- [x] `/backend-engineer` — `tags` table included in `InitialSchema` migration; `Tag` entity (`Domain/Entities/Tag.cs`), `TagConfiguration` (`Infrastructure/Persistence/Configurations/TagConfiguration.cs`)
+- [x] `/backend-engineer` — Tag filter integration in `LogQueryService.ResolveTagFiltersAsync` — resolves `tagIds` → merges terms/levels/eventTypes into the adapter query
+- [ ] `/backend-engineer` — `TagService` (CRUD) in `Application/Services/TagService.cs`, `TagEndpoints` in `Controllers/TagEndpoints.cs` (GET, POST, PUT, DELETE `/api/v1/tags`), wired in `Program.cs`
+- [ ] `/backend-engineer` — Integration tests for tag CRUD endpoints (`Integration/TagEndpointTests.cs`)
 - [ ] `/frontend-engineer` — Tag query/mutation hooks: `useTagsQuery`, `useCreateTag`, `useUpdateTag`, `useDeleteTag`
 - [ ] `/frontend-engineer` — TagsDialog: create/edit form with name, colour picker, multi-select for terms/levels/eventTypes (react-hook-form + zod)
 - [ ] `/frontend-engineer` — TagChipRow on Logs page: rendered as shadcn `Badge` components, click to toggle, active tags passed as `tagIds` in query (mockup: `logs.jsx` search bar area with tag chips like `env : prod`)
