@@ -16,7 +16,7 @@ public class LogQueryService(
 {
     private const int DefaultLimit = 500;
 
-    public async Task<List<LogEntry>> QueryAsync(LogQueryRequest request, CancellationToken ct)
+    public async Task<LogQueryResult> QueryAsync(LogQueryRequest request, CancellationToken ct)
     {
         logger.LogDebug("Log query for source {SourceId}", request.SourceId);
 
@@ -26,31 +26,54 @@ public class LogQueryService(
         var adapter = adapterFactory.GetAdapter(source.Type);
         var configJson = sourceService.DecryptConfig(source);
         var limit = request.Limit ?? DefaultLimit;
+        var skip = request.Skip ?? 0;
 
         var perTagFilters = await ResolvePerTagFiltersAsync(request.TagIds ?? [], ct);
 
         if (perTagFilters.Count <= 1)
         {
             var tagFilters = perTagFilters.Count == 1 ? perTagFilters[0] : TagFilters.Empty;
-            return await ExecuteAdapterQueryAsync(adapter, configJson, source.Name, request, tagFilters, limit, ct);
+            // Probe one extra row beyond the page to detect whether a next page exists.
+            var page = await ExecuteAdapterQueryAsync(
+                adapter, configJson, source.Name, request, tagFilters, limit + 1, skip, ct);
+            return Paginate(page, limit);
         }
 
-        // Multiple tags — run one query per tag in parallel, merge results
+        // Multiple tags — run one query per tag in parallel, then merge. Each
+        // sub-query fetches the newest (skip + limit + 1) rows from offset 0: the
+        // merged top-(skip + limit + 1) can't contain more than that many rows from
+        // any single tag, so this is enough to compute the global window — plus the
+        // one probe row — correctly. Paging is applied once, on the merged stream
+        // below; passing request.Skip into each sub-query would skip independently
+        // and return the wrong page.
+        var fetch = skip + limit + 1;
         var tasks = perTagFilters.Select(tf =>
-            ExecuteAdapterQueryAsync(adapter, configJson, source.Name, request, tf, limit, ct));
+            ExecuteAdapterQueryAsync(adapter, configJson, source.Name, request, tf, fetch, skip: 0, ct));
 
         var results = await Task.WhenAll(tasks);
 
-        return results
+        var merged = results
             .SelectMany(r => r)
             .DistinctBy(e => (e.Timestamp, e.EventType, e.Message, e.Source))
             .OrderByDescending(e => e.Timestamp)
+            .Skip(skip)
+            .Take(limit + 1)
             .ToList();
+
+        return Paginate(merged, limit);
+    }
+
+    // Trims the one-row probe and reports whether more pages follow.
+    private static LogQueryResult Paginate(List<LogEntry> rows, int limit)
+    {
+        var hasMore = rows.Count > limit;
+        var entries = hasMore ? rows.Take(limit).ToList() : rows;
+        return new LogQueryResult(entries, hasMore);
     }
 
     private async Task<List<LogEntry>> ExecuteAdapterQueryAsync(
         ILogSourceAdapter adapter, string configJson, string sourceName,
-        LogQueryRequest request, TagFilters tagFilters, int limit, CancellationToken ct)
+        LogQueryRequest request, TagFilters tagFilters, int limit, int skip, CancellationToken ct)
     {
         var adapterRequest = new AdapterQueryRequest(
             ConfigJson: configJson,
@@ -60,7 +83,7 @@ public class LogQueryService(
             TagFilters: tagFilters,
             Limit: limit,
             EventTypes: request.EventTypes,
-            Skip: request.Skip);
+            Skip: skip);
 
         try
         {
@@ -103,7 +126,7 @@ public class LogQueryService(
 
                 result.Add(new TagFilters(termGroups, levels, eventTypes));
             }
-            catch { /* malformed tag filter — skip */ }
+            catch (JsonException) { /* malformed tag filter — skip */ }
         }
 
         return result;
@@ -127,6 +150,8 @@ public record LogQueryRequest(
     int? Limit,
     List<string>? EventTypes = null,
     int? Skip = null);
+
+public record LogQueryResult(List<LogEntry> Entries, bool HasMore);
 
 public record TimeRangeRequest(
     string Type,

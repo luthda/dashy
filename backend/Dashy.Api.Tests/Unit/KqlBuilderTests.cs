@@ -166,4 +166,34 @@ public class KqlBuilderTests
         kql.Should().Contain("(* contains \"winfap\" and * contains \"success\")");
         kql.Should().NotContain(" or ");
     }
+
+    [Fact]
+    public void BuildKql_NoSkip_OmitsRowNumberPaging()
+    {
+        var kql = AppInsightsAdapter.BuildKql(null, null, TagFilters.Empty, 100);
+
+        kql.Should().NotContain("row_number()");
+        kql.Should().Contain("| limit 100");
+    }
+
+    [Fact]
+    public void BuildKql_WithSkip_AppliesRowNumberPaging()
+    {
+        var kql = AppInsightsAdapter.BuildKql(null, null, TagFilters.Empty, 100, skip: 500);
+
+        // KQL has no OFFSET — paging drops the first `skip` rows via row_number().
+        kql.Should().Contain("serialize _rn = row_number()");
+        kql.Should().Contain("where _rn > 500");
+        kql.Should().Contain("| limit 100");
+    }
+
+    [Fact]
+    public void BuildKql_WithSkip_PerTableTopCoversSkipPlusLimit()
+    {
+        // Each table must surface enough rows (skip + limit) for a later page to
+        // exist after the union; otherwise paging just repeats the first page.
+        var kql = AppInsightsAdapter.BuildKql("winfap", null, TagFilters.Empty, 100, skip: 500);
+
+        kql.Should().Contain("top 600 by timestamp desc");
+    }
 }

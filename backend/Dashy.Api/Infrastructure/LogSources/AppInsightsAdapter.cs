@@ -21,7 +21,7 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         var cfg = JsonSerializer.Deserialize<AppInsightsConfig>(request.ConfigJson, JsonSerializerOptions.Web)
             ?? throw new InvalidOperationException("Invalid App Insights config");
 
-        var kql = BuildKql(request.FreeText, request.TimeRange, request.TagFilters, request.Limit, request.EventTypes);
+        var kql = BuildKql(request.FreeText, request.TimeRange, request.TagFilters, request.Limit, request.EventTypes, request.Skip ?? 0);
         var timespan = ToAppInsightsTimespan(request.TimeRange);
 
         logger.LogInformation(
@@ -108,7 +108,7 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
 
     public static string BuildKql(
         string? freeText, TimeRangeRequest? timeRange, TagFilters tags, int limit,
-        List<string>? eventTypes = null)
+        List<string>? eventTypes = null, int skip = 0)
     {
         var sb = new StringBuilder();
 
@@ -142,8 +142,13 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         // single high-volume table (e.g. dependencies) consumes the entire global
         // limit and starves low-volume-but-important tables like exceptions — they
         // exist but never appear in the newest-N time-ordered window.
+        // Each table must contribute the newest (skip + limit) rows, not just
+        // `limit`: otherwise rows that fall into a later page (beyond the first
+        // `limit` per table) would never reach the union and paging would repeat
+        // the first page.
+        var perTableTop = skip + limit;
         var projections = tables
-            .Select(t => $"({TableProjections[t]}{textFilter}\n   | top {limit} by timestamp desc)")
+            .Select(t => $"({TableProjections[t]}{textFilter}\n   | top {perTableTop} by timestamp desc)")
             .ToList();
 
         if (projections.Count == 1)
@@ -198,9 +203,17 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         }
 
         sb.Append("\n| order by timestamp desc");
-        // Each table already contributed at most `limit` rows; cap the merged set
-        // generously so every included event type can still be represented.
-        sb.Append($"\n| limit {limit * Math.Max(1, tables.Count)}");
+
+        // Page into the merged, time-ordered set. KQL has no OFFSET, so drop the
+        // first `skip` rows via row_number() before taking the page.
+        if (skip > 0)
+        {
+            sb.Append("\n| serialize _rn = row_number()");
+            sb.Append($"\n| where _rn > {skip}");
+            sb.Append("\n| project-away _rn");
+        }
+
+        sb.Append($"\n| limit {limit}");
 
         return sb.ToString();
     }

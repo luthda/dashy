@@ -35,7 +35,7 @@ export function LogsPage() {
   const [page, setPage] = useState(0)
   const [showAddSource, setShowAddSource] = useState(false)
   const [showTagsDialog, setShowTagsDialog] = useState(false)
-  const { data, totalCount, isLoading, queryError, serverError, run } = useLogQuery()
+  const { data, hasMore, isLoading, queryError, serverError, run } = useLogQuery()
 
   const runQuery = useCallback(
     (p: number = page) => {
@@ -84,8 +84,6 @@ export function LogsPage() {
       ),
     [data, activeLevels, activeEventTypes],
   )
-
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE))
 
   if (!sources?.length) {
     return (
@@ -165,11 +163,10 @@ export function LogsPage() {
 
       <LogStream rows={filteredRows} isLoading={isLoading} />
 
-      {totalCount > PAGE && (
+      {(page > 0 || hasMore) && (
         <Pagination
           page={page}
-          totalPages={totalPages}
-          totalCount={totalCount}
+          hasMore={hasMore}
           onPrev={() => { const p = page - 1; setPage(p); runQuery(p) }}
           onNext={() => { const p = page + 1; setPage(p); runQuery(p) }}
         />

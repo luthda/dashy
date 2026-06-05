@@ -3,8 +3,14 @@ import { useCreateSource, useTestConnection, useUpdateSource } from "@/hooks/use
 import { SourceType, type Source } from "@/lib/types"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { CheckCircle2Icon, Loader2Icon, XCircleIcon } from "lucide-react"
-import { useForm } from "react-hook-form"
+import { useForm, type Resolver } from "react-hook-form"
 import { z } from "zod"
+
+type SourceForm = {
+  name: string
+  appId: string
+  apiKey: string
+}
 
 const createSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -12,17 +18,13 @@ const createSchema = z.object({
   apiKey: z.string().min(1, "API Key is required"),
 })
 
+// Edit mode allows the credential fields to be left blank (keep saved values),
+// but they stay required `string`s so the form type matches createSchema.
 const editSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  appId: z.string().default(""),
-  apiKey: z.string().default(""),
+  appId: z.string(),
+  apiKey: z.string(),
 })
-
-type SourceForm = {
-  name: string
-  appId: string
-  apiKey: string
-}
 
 interface SourceSetupDialogProps {
   source?: Source
@@ -34,7 +36,7 @@ export function SourceSetupDialog({ source, onClose }: SourceSetupDialogProps) {
 
   const schema = isEditing ? editSchema : createSchema
   const form = useForm<SourceForm>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as Resolver<SourceForm>,
     defaultValues: {
       name: source?.name ?? "",
       appId: "",
