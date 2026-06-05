@@ -4,9 +4,6 @@ import { useLocation } from "react-router-dom"
 
 const PAGE_TITLE: Record<string, string> = {
   "/logs": "Logs",
-  "/metrics": "Metrics",
-  "/traces": "Traces",
-  "/alerts": "Alerts",
   "/settings/sources": "Sources",
 }
 
@@ -47,9 +44,6 @@ export function Topbar({ theme, onToggleTheme, onToggleSidebar }: TopbarProps) {
           {theme === "dark" ? <SunIcon size={17} /> : <MoonIcon size={17} />}
         </button>
 
-        <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground grid place-items-center text-[11.5px] font-semibold">
-          SD
-        </div>
       </div>
     </header>
   )

@@ -142,6 +142,6 @@ Phase 0 (scaffolding)
 |---|---|---|---|
 | 1 | Loki auth: BasicAuth or Bearer token only? | Design doc Q1 | Phase 1 — Loki query client |
 | 2 | Max log rows per query? (affects pagination vs. virtual scroll) | Design doc Q2 | Phase 2 — LogTable (virtual scroll if > 500) |
-| 3 | Tag filter combination: AND or OR when multiple chips active? | Design doc Q3 | Phase 3 — tag filter integration in LogQueryService |
+| 3 | ~~Tag filter combination: AND or OR when multiple chips active?~~ **Resolved: OR.** Multiple active tags union their filters — wider selection, not narrower. Already implemented in `ResolveTagFiltersAsync`. | Design doc Q3 | ~~Phase 3~~ Done |
 | 4 | Design doc architecture says SQLite; rollout section and backend-engineer skill say PostgreSQL. Which is canonical? | Plan author | Phase 0 — DB setup. Plan assumes PostgreSQL per backend-engineer skill |
 | 5 | Credential encryption: AES-256-GCM (env var key) vs. .NET Data Protection API? | Design doc Q4 | Phase 0 — IEncryptionService. Plan assumes AES-256-GCM per backend-engineer skill |
