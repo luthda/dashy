@@ -23,17 +23,42 @@ public class LogQueryService(
         var source = await db.Sources.FindAsync([request.SourceId], ct)
             ?? throw new SourceNotFoundException(request.SourceId);
 
-        var tagFilters = await ResolveTagFiltersAsync(request.TagIds ?? [], ct);
         var adapter = adapterFactory.GetAdapter(source.Type);
         var configJson = sourceService.DecryptConfig(source);
+        var limit = request.Limit ?? DefaultLimit;
 
+        var perTagFilters = await ResolvePerTagFiltersAsync(request.TagIds ?? [], ct);
+
+        if (perTagFilters.Count <= 1)
+        {
+            var tagFilters = perTagFilters.Count == 1 ? perTagFilters[0] : TagFilters.Empty;
+            return await ExecuteAdapterQueryAsync(adapter, configJson, source.Name, request, tagFilters, limit, ct);
+        }
+
+        // Multiple tags — run one query per tag in parallel, merge results
+        var tasks = perTagFilters.Select(tf =>
+            ExecuteAdapterQueryAsync(adapter, configJson, source.Name, request, tf, limit, ct));
+
+        var results = await Task.WhenAll(tasks);
+
+        return results
+            .SelectMany(r => r)
+            .DistinctBy(e => (e.Timestamp, e.EventType, e.Message, e.Source))
+            .OrderByDescending(e => e.Timestamp)
+            .ToList();
+    }
+
+    private async Task<List<LogEntry>> ExecuteAdapterQueryAsync(
+        ILogSourceAdapter adapter, string configJson, string sourceName,
+        LogQueryRequest request, TagFilters tagFilters, int limit, CancellationToken ct)
+    {
         var adapterRequest = new AdapterQueryRequest(
             ConfigJson: configJson,
-            SourceName: source.Name,
+            SourceName: sourceName,
             FreeText: request.Query,
             TimeRange: request.TimeRange,
             TagFilters: tagFilters,
-            Limit: request.Limit ?? DefaultLimit,
+            Limit: limit,
             EventTypes: request.EventTypes,
             Skip: request.Skip);
 
@@ -48,20 +73,18 @@ public class LogQueryService(
         }
     }
 
-    private async Task<TagFilters> ResolveTagFiltersAsync(List<Guid> tagIds, CancellationToken ct)
+    private async Task<List<TagFilters>> ResolvePerTagFiltersAsync(List<Guid> tagIds, CancellationToken ct)
     {
         if (tagIds.Count == 0)
         {
-            return TagFilters.Empty;
+            return [];
         }
 
         var tags = await db.Tags
             .Where(t => tagIds.Contains(t.Id))
             .ToListAsync(ct);
 
-        var termGroups = new List<List<string>>();
-        var levels = new HashSet<LogLevel>();
-        var eventTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<TagFilters>();
 
         foreach (var tag in tags)
         {
@@ -73,26 +96,17 @@ public class LogQueryService(
                     continue;
                 }
 
-                var tagTerms = (filters.Terms ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
-                if (tagTerms.Count > 0)
-                {
-                    termGroups.Add(tagTerms);
-                }
+                var terms = (filters.Terms ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+                var termGroups = terms.Count > 0 ? new List<List<string>> { terms } : [];
+                var levels = (filters.Levels ?? []).ToList();
+                var eventTypes = (filters.EventTypes ?? []).ToList();
 
-                foreach (var l in filters.Levels ?? [])
-                {
-                    levels.Add(l);
-                }
-
-                foreach (var e in filters.EventTypes ?? [])
-                {
-                    eventTypes.Add(e);
-                }
+                result.Add(new TagFilters(termGroups, levels, eventTypes));
             }
             catch { /* malformed tag filter — skip */ }
         }
 
-        return new TagFilters(termGroups, levels.ToList(), eventTypes.ToList());
+        return result;
     }
 
     private static (int StatusCode, string Body) ExtractErrorDetails(Exception ex)
