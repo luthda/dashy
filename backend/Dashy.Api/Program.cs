@@ -1,8 +1,10 @@
-using Dashy.Api.Data;
-using Dashy.Api.Endpoints;
-using Dashy.Api.Infrastructure;
+using Dashy.Api.Application.Abstractions;
+using Dashy.Api.Application.Services;
+using Dashy.Api.Controllers;
+using Dashy.Api.Infrastructure.Encryption;
+using Dashy.Api.Infrastructure.LogSources;
+using Dashy.Api.Infrastructure.Persistence;
 using Dashy.Api.Options;
-using Dashy.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -75,7 +77,7 @@ app.UseCors();
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).WithName("Health");
 
-app.MapGroup("/api/v1/sources").MapSourceEndpoints();
+app.MapGroup("/api/v1/sources").MapLogSourceEndpoints();
 app.MapGroup("/api/v1/logs").MapLogEndpoints();
 
 app.Run();

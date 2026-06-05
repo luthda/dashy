@@ -1,7 +1,34 @@
 # ADR-004: Pragmatic layered architecture with provider seam as the extension point
 
 **Date:** 2026-06-04
-**Status:** Accepted
+**Status:** Accepted (amended 2026-06-05)
+
+## Amendment (2026-06-05) — explicit onion folder layout
+
+PR review (#9) asked that the project structure visibly reflect the onion/clean
+architecture layers rather than the original mixed folder names. In response, the four
+conceptual layers below were promoted to **explicit top-level folders and namespaces**
+inside the single `Dashy.Api` project:
+
+| Layer | Folder / namespace |
+|---|---|
+| Domain | `Domain/Entities`, `Domain/Models` (`Dashy.Api.Domain.*`) |
+| Application | `Application/Services`, `Application/Abstractions`, `Application/Exceptions` (`Dashy.Api.Application.*`) |
+| Infrastructure | `Infrastructure/Persistence` (+ `Configurations`, `Migrations`), `Infrastructure/Encryption`, `Infrastructure/LogSources` (`Dashy.Api.Infrastructure.*`) |
+| Presentation | `Controllers` (`Dashy.Api.Controllers`) — minimal-API endpoint groups |
+
+The interfaces Infrastructure implements (`ILogSourceAdapter`, `ILogSourceAdapterFactory`,
+`IEncryptionService`) live in `Application/Abstractions`. `Options/` remains a top-level
+cross-cutting folder for configuration POCOs (it is not a layer).
+
+**This amendment does NOT change the core decisions below:** still a single project, still
+**no repository/unit-of-work abstraction** — Application services continue to use EF Core's
+`DashyDbContext` directly. The reorganisation is folder/namespace-only; the dependency rules
+are unchanged.
+
+Note for future migrations: the EF migrations now live under
+`Infrastructure/Persistence/Migrations`, so generate new ones with
+`dotnet ef migrations add <Name> -o Infrastructure/Persistence/Migrations`.
 
 ## Context
 
@@ -35,15 +62,19 @@ We will adopt a **pragmatic layered architecture inside the single `Dashy.Api`
 project**, enforced by folder conventions and dependency direction rather than a
 multi-project split:
 
-- **Domain** (`Data/Entities`, `Models`): entities and value types. No dependency on EF
-  Core, ASP.NET, or HTTP clients.
-- **Application** (`Services`): use-case orchestration (`SourceService`,
-  `LogQueryService`). Depends on Domain and on **abstractions** for outbound
-  infrastructure (`ILogSourceAdapter`, `IEncryptionService`).
-- **Infrastructure** (`Infrastructure`, `Data`): EF Core `DashyDbContext`, the
-  App Insights / Loki adapters, encryption. Implements the abstractions the Application
-  layer depends on.
-- **Api** (`Endpoints`, `Program.cs`): minimal-API endpoints, DI wiring, JSON config.
+- **Domain** (`Domain/Entities`, `Domain/Models`): entities and value types. No dependency
+  on EF Core, ASP.NET, or HTTP clients.
+- **Application** (`Application/Services`, `Application/Abstractions`): use-case
+  orchestration (`SourceService`, `LogQueryService`). Depends on Domain and on
+  **abstractions** for outbound infrastructure (`ILogSourceAdapter`, `IEncryptionService`).
+- **Infrastructure** (`Infrastructure/Persistence`, `Infrastructure/Encryption`,
+  `Infrastructure/LogSources`): EF Core `DashyDbContext`, the App Insights adapter,
+  encryption. Implements the abstractions the Application layer depends on.
+- **Presentation** (`Controllers`, `Program.cs`): minimal-API endpoint groups, DI wiring,
+  JSON config.
+
+> The folder names above reflect the 2026-06-05 amendment. See the amendment note at the
+> top of this ADR for the original-to-onion mapping.
 
 The **log-source provider abstraction (`ILogSourceAdapter`) is the primary architectural
 extension point** — adding a new source means adding one adapter and registering it, with

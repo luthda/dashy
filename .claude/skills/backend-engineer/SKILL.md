@@ -83,20 +83,28 @@ if (source is null)
 
 ## Project Structure
 
+Folders map 1:1 onto the onion layers (single project — see ADR-004):
+
 ```
 backend/
   Dashy.Api/                  # ASP.NET Core Web API project
     Program.cs                # Host builder, service registration, middleware, endpoint mapping
-    Endpoints/                # Minimal API endpoint groups (static classes)
-    Services/                 # Business logic
-    Data/
-      DashyDbContext.cs       # EF Core DbContext
-      Entities/               # EF entity classes
-      Configurations/         # IEntityTypeConfiguration<T> files
-      Migrations/             # EF Core generated migrations
-    Models/                   # Request/response DTOs (records)
-    BackgroundServices/       # IHostedService implementations
-    Infrastructure/           # Cross-cutting: encryption, SSE, external API clients
+    Domain/                   # Layer: Domain (no EF Core / ASP.NET / HTTP deps)
+      Entities/               # EF entity classes (POCOs)
+      Models/                 # Domain value types & DTOs (records: LogEntry, LogLevel, ...)
+    Application/              # Layer: Application (use-case orchestration)
+      Services/               # Business logic (SourceService, LogQueryService)
+      Abstractions/           # Outbound-infra interfaces (ILogSourceAdapter, IEncryptionService)
+      Exceptions/             # Application-level exceptions
+    Infrastructure/          # Layer: Infrastructure (implements Application abstractions)
+      Persistence/
+        DashyDbContext.cs     # EF Core DbContext
+        Configurations/       # IEntityTypeConfiguration<T> files
+        Migrations/           # EF Core generated migrations
+      Encryption/             # AES-GCM encryption service
+      LogSources/             # Log-source adapters + factory (App Insights, ...)
+    Controllers/             # Layer: Presentation — minimal API endpoint groups (static classes)
+    Options/                  # Cross-cutting config POCOs (not a layer)
   Dashy.Api.Tests/            # Test project
   Dashy.sln                   # Solution file
 ```
@@ -109,14 +117,14 @@ Pragmatic layered architecture enforced by folder conventions within the single 
 
 | Layer | Folders | Depends on |
 |---|---|---|
-| **Domain** | `Data/Entities`, `Models` | Nothing — no EF Core, ASP.NET, or HTTP deps |
-| **Application** | `Services` | Domain + infrastructure **interfaces** (`ILogSourceAdapter`, `IEncryptionService`) |
-| **Infrastructure** | `Infrastructure`, `Data` | Application interfaces (implements them) |
-| **Api** | `Endpoints`, `Program.cs` | Everything (DI wiring layer) |
+| **Domain** | `Domain/Entities`, `Domain/Models` | Nothing — no EF Core, ASP.NET, or HTTP deps |
+| **Application** | `Application/Services`, `Application/Abstractions`, `Application/Exceptions` | Domain + infrastructure **interfaces** (`ILogSourceAdapter`, `IEncryptionService`) |
+| **Infrastructure** | `Infrastructure/Persistence`, `Infrastructure/Encryption`, `Infrastructure/LogSources` | Application interfaces (implements them) |
+| **Presentation** | `Controllers`, `Program.cs` | Everything (DI wiring layer) |
 
 **Boundary rules:**
 - Endpoints never touch `DashyDbContext` directly — always via Application services.
-- Application services depend on infrastructure only through interfaces defined in `Services/`.
+- Application services depend on infrastructure only through interfaces defined in `Application/Abstractions/`.
 - No repository/unit-of-work abstraction over EF Core (ADR-001 locks in SQLite).
 - `ILogSourceAdapter` is the extension point — adding a new source = one adapter + DI registration.
 

@@ -1,6 +1,6 @@
-using Dashy.Api.Infrastructure;
-using Dashy.Api.Models;
-using Dashy.Api.Services;
+using Dashy.Api.Application.Services;
+using Dashy.Api.Domain.Models;
+using Dashy.Api.Infrastructure.LogSources;
 using FluentAssertions;
 
 namespace Dashy.Api.Tests.Unit;
