@@ -59,7 +59,7 @@ public class LogQueryService(
             .Where(t => tagIds.Contains(t.Id))
             .ToListAsync(ct);
 
-        var terms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var termGroups = new List<List<string>>();
         var levels = new HashSet<LogLevel>();
         var eventTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -73,9 +73,10 @@ public class LogQueryService(
                     continue;
                 }
 
-                foreach (var t in filters.Terms ?? [])
+                var tagTerms = (filters.Terms ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+                if (tagTerms.Count > 0)
                 {
-                    terms.Add(t);
+                    termGroups.Add(tagTerms);
                 }
 
                 foreach (var l in filters.Levels ?? [])
@@ -91,7 +92,7 @@ public class LogQueryService(
             catch { /* malformed tag filter — skip */ }
         }
 
-        return new TagFilters(terms.ToList(), levels.ToList(), eventTypes.ToList());
+        return new TagFilters(termGroups, levels.ToList(), eventTypes.ToList());
     }
 
     private static (int StatusCode, string Body) ExtractErrorDetails(Exception ex)
@@ -120,7 +121,7 @@ public record TimeRangeRequest(
     DateTime? To);
 
 public record TagFilters(
-    List<string> Terms,
+    List<List<string>> TermGroups,
     List<LogLevel> Levels,
     List<string> EventTypes)
 {

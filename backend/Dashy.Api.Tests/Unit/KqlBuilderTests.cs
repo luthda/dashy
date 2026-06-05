@@ -142,9 +142,28 @@ public class KqlBuilderTests
     [Fact]
     public void BuildKql_TermFilter_ContainsContainsClause()
     {
-        var tags = new TagFilters(["error-code-42"], [], []);
+        var tags = new TagFilters([["error-code-42"]], [], []);
         var kql = AppInsightsAdapter.BuildKql(null, null, tags, 100);
 
-        kql.Should().Contain("where * contains \"error-code-42\"");
+        kql.Should().Contain("where (* contains \"error-code-42\")");
+    }
+
+    [Fact]
+    public void BuildKql_MultipleTagTermGroups_OrAcrossTagsAndWithinTags()
+    {
+        var tags = new TagFilters([["winfap", "success"], ["collact", "error"]], [], []);
+        var kql = AppInsightsAdapter.BuildKql(null, null, tags, 100);
+
+        kql.Should().Contain("(* contains \"winfap\" and * contains \"success\") or (* contains \"collact\" and * contains \"error\")");
+    }
+
+    [Fact]
+    public void BuildKql_SingleTagMultipleTerms_AndWithinGroup()
+    {
+        var tags = new TagFilters([["winfap", "success"]], [], []);
+        var kql = AppInsightsAdapter.BuildKql(null, null, tags, 100);
+
+        kql.Should().Contain("(* contains \"winfap\" and * contains \"success\")");
+        kql.Should().NotContain(" or ");
     }
 }

@@ -115,20 +115,28 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         // Determine which tables to include
         var tables = ResolveTableNames(eventTypes, tags.EventTypes);
 
-        // Substring text filters (free-text box + tag terms) scan ALL columns —
-        // including customDimensions and operation/role names — not just the
-        // synthesized eventMessage. They are applied INSIDE each table subquery,
-        // BEFORE the per-table `top`, so rows matching outside the newest-N window
-        // are not truncated away before the filter ever runs.
-        var textTerms = new List<string>();
+        // Text filters applied INSIDE each table subquery, BEFORE the per-table
+        // `top`, so matches outside the newest-N window aren't truncated away.
+        // Free-text is AND'd with tag terms. Tag term groups are OR'd across tags
+        // (each tag's terms are AND'd internally).
+        var filterParts = new List<string>();
+
         if (!string.IsNullOrWhiteSpace(freeText))
         {
-            textTerms.Add(freeText);
+            filterParts.Add($"\n   | where * contains \"{EscapeKql(freeText)}\"");
         }
-        textTerms.AddRange(tags.Terms);
 
-        var textFilter = string.Concat(
-            textTerms.Select(t => $"\n   | where * contains \"{EscapeKql(t)}\""));
+        if (tags.TermGroups.Count > 0)
+        {
+            var groupClauses = tags.TermGroups.Select(group =>
+            {
+                var andParts = group.Select(t => $"* contains \"{EscapeKql(t)}\"");
+                return $"({string.Join(" and ", andParts)})";
+            });
+            filterParts.Add($"\n   | where {string.Join(" or ", groupClauses)}");
+        }
+
+        var textFilter = string.Concat(filterParts);
 
         // Limit EACH table to `limit` rows *before* the union. Without this, a
         // single high-volume table (e.g. dependencies) consumes the entire global
