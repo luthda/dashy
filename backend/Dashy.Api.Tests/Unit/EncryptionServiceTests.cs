@@ -1,4 +1,5 @@
-using Dashy.Api.Infrastructure;
+using Dashy.Api.Application.Abstractions;
+using Dashy.Api.Infrastructure.Encryption;
 using Dashy.Api.Options;
 using FluentAssertions;
 using MsOptions = Microsoft.Extensions.Options.Options;

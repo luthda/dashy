@@ -1,4 +1,4 @@
-using Dashy.Api.Data;
+using Dashy.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;

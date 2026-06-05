@@ -1,6 +1,6 @@
-using Dashy.Api.Infrastructure;
-using Dashy.Api.Models;
-using Dashy.Api.Services;
+using Dashy.Api.Application.Services;
+using Dashy.Api.Domain.Models;
+using Dashy.Api.Infrastructure.LogSources;
 using FluentAssertions;
 
 namespace Dashy.Api.Tests.Unit;
@@ -118,7 +118,7 @@ public class KqlBuilderTests
         var kql = AppInsightsAdapter.BuildKql(null, null, TagFilters.Empty, 100,
             eventTypes: [EventType.Exception]);
 
-        kql.Should().Contain("severityLevel = 3");
+        kql.Should().Contain("severityLevel = toint(3)");
         kql.Should().Contain("coalesce(outerMessage, innermostMessage)");
         kql.Should().Contain("exProblemId = problemId");
         kql.Should().Contain("exMethod = method");
