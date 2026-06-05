@@ -17,7 +17,7 @@ export function LogStream({ rows, isLoading }: LogStreamProps) {
 
   return (
     <div className="bg-card border-border flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-      <div className="text-muted-foreground border-border grid shrink-0 grid-cols-[18px_132px_72px_100px_144px_1fr] gap-3 border-b px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-wider">
+      <div className="text-muted-foreground border-border grid shrink-0 grid-cols-[18px_200px_72px_100px_144px_1fr] gap-3 border-b px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-wider">
         <span />
         <span>Time</span>
         <span>Level</span>
@@ -63,7 +63,8 @@ function LogRow({
   const levelDef = LEVELS.find((l) => l.id === entry.level)
   const evtDef = EVENT_TYPES.find((e) => e.id === entry.eventType)
   const ts = new Date(entry.timestamp)
-  const time = ts.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, fractionalSecondDigits: 3 })
+  const date = ts.toLocaleDateString(undefined, { year: "numeric", month: "2-digit", day: "2-digit" })
+  const time = `${date} ${ts.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false, fractionalSecondDigits: 3 })}`
   const service = entry.properties?.["service"] ?? entry.source
 
   return (
@@ -71,7 +72,7 @@ function LogRow({
       <div
         onClick={onToggle}
         className={cn(
-          "border-border grid cursor-pointer grid-cols-[18px_132px_72px_100px_144px_1fr] gap-3 border-b px-3.5 py-1.5 text-[12.5px] transition-colors hover:bg-accent/50",
+          "border-border grid cursor-pointer grid-cols-[18px_200px_72px_100px_144px_1fr] gap-3 border-b px-3.5 py-1.5 text-[12.5px] transition-colors hover:bg-accent/50",
           open && "bg-accent/30",
         )}
       >
@@ -154,7 +155,7 @@ function LogRow({
 function LogStreamSkeleton() {
   return (
     <div className="bg-card border-border flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-      <div className="text-muted-foreground border-border grid shrink-0 grid-cols-[18px_132px_72px_100px_144px_1fr] gap-3 border-b px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-wider">
+      <div className="text-muted-foreground border-border grid shrink-0 grid-cols-[18px_200px_72px_100px_144px_1fr] gap-3 border-b px-3.5 py-2.5 text-[11px] font-medium uppercase tracking-wider">
         <span />
         <span>Time</span>
         <span>Level</span>
@@ -166,7 +167,7 @@ function LogStreamSkeleton() {
         {Array.from({ length: 8 }, (_, i) => (
           <div
             key={i}
-            className="border-border grid grid-cols-[18px_132px_72px_100px_144px_1fr] gap-3 border-b px-3.5 py-2.5"
+            className="border-border grid grid-cols-[18px_200px_72px_100px_144px_1fr] gap-3 border-b px-3.5 py-2.5"
           >
             <span />
             <div className="bg-muted h-3.5 w-24 animate-pulse rounded" />
