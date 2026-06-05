@@ -1,4 +1,3 @@
-import { cn } from "@/lib/utils"
 import { useCreateSource, useTestConnection, useUpdateSource } from "@/hooks/useSources"
 import { SourceType, type Source } from "@/lib/types"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -6,49 +5,22 @@ import { CheckCircle2Icon, Loader2Icon, XCircleIcon } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
-// ── Create schemas: credentials required ────────────────────────────────────
-const appInsightsCreate = z.object({
+const createSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  type: z.literal(SourceType.AppInsights),
   appId: z.string().min(1, "Application ID is required"),
   apiKey: z.string().min(1, "API Key is required"),
 })
 
-const lokiCreate = z.object({
+const editSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  type: z.literal(SourceType.Loki),
-  baseUrl: z.url("Must be a valid URL"),
-  orgId: z.string().optional(),
-  authToken: z.string().optional(),
-})
-
-// ── Edit schemas: credentials optional (blank = keep existing) ───────────────
-const appInsightsEdit = z.object({
-  name: z.string().min(1, "Name is required"),
-  type: z.literal(SourceType.AppInsights),
   appId: z.string().optional(),
   apiKey: z.string().optional(),
 })
 
-const lokiEdit = z.object({
-  name: z.string().min(1, "Name is required"),
-  type: z.literal(SourceType.Loki),
-  baseUrl: z.string().optional(),
-  orgId: z.string().optional(),
-  authToken: z.string().optional(),
-})
-
-const createSourceSchema = z.discriminatedUnion("type", [appInsightsCreate, lokiCreate])
-const editSourceSchema = z.discriminatedUnion("type", [appInsightsEdit, lokiEdit])
-
-type CreateSourceForm = {
+type SourceForm = {
   name: string
-  type: SourceType
-  appId?: string
-  apiKey?: string
-  baseUrl?: string
-  orgId?: string
-  authToken?: string
+  appId: string
+  apiKey: string
 }
 
 interface SourceSetupDialogProps {
@@ -59,18 +31,15 @@ interface SourceSetupDialogProps {
 export function SourceSetupDialog({ source, onClose }: SourceSetupDialogProps) {
   const isEditing = Boolean(source)
 
-  const form = useForm<CreateSourceForm>({
+  const form = useForm<SourceForm>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver((isEditing ? editSourceSchema : createSourceSchema) as any),
+    resolver: zodResolver((isEditing ? editSchema : createSchema) as any),
     defaultValues: {
       name: source?.name ?? "",
-      type: (source?.type as SourceType) ?? SourceType.AppInsights,
       appId: "",
       apiKey: "",
-    } as CreateSourceForm,
+    },
   })
-
-  const watchedType = form.watch("type")
 
   const create = useCreateSource()
   const update = useUpdateSource()
@@ -79,82 +48,27 @@ export function SourceSetupDialog({ source, onClose }: SourceSetupDialogProps) {
   const isSubmitting = create.isPending || update.isPending
   const submitError = create.error?.message ?? update.error?.message
 
-  const fieldError = (name: string) =>
-    (form.formState.errors as Record<string, { message?: string }>)[name]?.message
-
-  function buildConfig(data: CreateSourceForm) {
-    if (data.type === SourceType.AppInsights) {
-      return { appId: data.appId, apiKey: data.apiKey }
-    }
-    return {
-      baseUrl: data.baseUrl,
-      orgId: data.orgId || undefined,
-      authToken: data.authToken || undefined,
-    }
-  }
-
-  // Edit mode: blank credentials → return undefined so the server keeps the
-  // existing encrypted config untouched. Any value entered replaces the whole blob.
-  function buildEditConfig(data: CreateSourceForm): object | undefined {
-    if (data.type === SourceType.AppInsights) {
+  async function onSubmit(data: SourceForm) {
+    if (isEditing && source) {
       const appId = data.appId?.trim() ?? ""
       const apiKey = data.apiKey?.trim() ?? ""
-      if (!appId && !apiKey) return undefined
-      return { appId, apiKey }
-    }
-    const baseUrl = data.baseUrl?.trim() ?? ""
-    const orgId = data.orgId?.trim() || undefined
-    const authToken = data.authToken?.trim() || undefined
-    if (!baseUrl && !orgId && !authToken) return undefined
-    return { baseUrl, orgId, authToken }
-  }
-
-  async function onSubmit(data: CreateSourceForm) {
-    if (isEditing && source) {
-      // Validate "all or nothing" so we never store a half-filled credential blob.
-      if (data.type === SourceType.AppInsights) {
-        const appId = data.appId?.trim() ?? ""
-        const apiKey = data.apiKey?.trim() ?? ""
-        if (Boolean(appId) !== Boolean(apiKey)) {
-          form.setError("appId", {
-            message: "Enter both Application ID and API Key, or leave both blank to keep current",
-          })
-          return
-        }
-      } else {
-        const baseUrl = data.baseUrl?.trim() ?? ""
-        const others = (data.orgId?.trim() || data.authToken?.trim()) ?? ""
-        if (!baseUrl && others) {
-          form.setError("baseUrl", {
-            message: "Base URL is required to change Loki credentials",
-          })
-          return
-        }
+      if (Boolean(appId) !== Boolean(apiKey)) {
+        form.setError("appId", {
+          message: "Enter both Application ID and API Key, or leave both blank to keep current",
+        })
+        return
       }
 
-      await update.mutateAsync({
-        id: source.id,
-        name: data.name,
-        config: buildEditConfig(data),
-      })
+      const config = appId && apiKey ? { appId, apiKey } : undefined
+      await update.mutateAsync({ id: source.id, name: data.name, config })
     } else {
-      await create.mutateAsync({ name: data.name, type: data.type, config: buildConfig(data) })
+      await create.mutateAsync({
+        name: data.name,
+        type: SourceType.AppInsights,
+        config: { appId: data.appId, apiKey: data.apiKey },
+      })
     }
     onClose()
-  }
-
-  function handleTypeChange(newType: SourceType) {
-    if (newType === SourceType.AppInsights) {
-      form.reset({ name: form.getValues("name"), type: newType, appId: "", apiKey: "" })
-    } else {
-      form.reset({
-        name: form.getValues("name"),
-        type: newType,
-        baseUrl: "",
-        orgId: "",
-        authToken: "",
-      })
-    }
   }
 
   return (
@@ -169,88 +83,36 @@ export function SourceSetupDialog({ source, onClose }: SourceSetupDialogProps) {
             <input {...form.register("name")} placeholder="My App Insights" className={inputCls} />
           </Field>
 
-          {!isEditing && (
-            <Field label="Type">
-              <div className="flex gap-2">
-                {([SourceType.AppInsights, SourceType.Loki] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => handleTypeChange(t)}
-                    className={cn(
-                      "h-9 flex-1 rounded-md border text-[13px] font-medium transition-colors",
-                      watchedType === t
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border text-muted-foreground hover:border-primary/50",
-                    )}
-                  >
-                    {t === SourceType.AppInsights ? "Azure App Insights" : "Grafana Loki"}
-                  </button>
-                ))}
-              </div>
-            </Field>
-          )}
-
-          {watchedType === SourceType.AppInsights ? (
-            <>
-              <Field label="Application ID" error={fieldError("appId")}>
-                <input
-                  {...form.register("appId")}
-                  placeholder={
-                    isEditing
-                      ? "Leave blank to keep current"
-                      : "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  }
-                  className={inputCls}
-                />
-              </Field>
-              <Field label="API Key (Read telemetry)" error={fieldError("apiKey")}>
-                <input
-                  {...form.register("apiKey")}
-                  type="password"
-                  placeholder={isEditing ? "Leave blank to keep current" : "Paste API key"}
-                  className={inputCls}
-                />
-              </Field>
-              <p className="text-muted-foreground -mt-2 text-[11.5px]">
-                {isEditing ? (
-                  "Leave both blank to keep the saved credentials, or enter both to replace them."
-                ) : (
-                  <>
-                    Azure Portal &rarr; App Insights &rarr; Configure &rarr; API Access. The
-                    Application ID is the GUID on that blade &mdash; not the instrumentation key or
-                    connection string.
-                  </>
-                )}
-              </p>
-            </>
-          ) : (
-            <>
-              <Field label="Base URL" error={fieldError("baseUrl")}>
-                <input
-                  {...form.register("baseUrl")}
-                  placeholder={isEditing ? "Leave blank to keep current" : "http://loki:3100"}
-                  className={inputCls}
-                />
-              </Field>
-              <Field label="Org ID (optional)">
-                <input {...form.register("orgId")} placeholder="tenant-id" className={inputCls} />
-              </Field>
-              <Field label="Auth token (optional)">
-                <input
-                  {...form.register("authToken")}
-                  type="password"
-                  placeholder={isEditing ? "Leave blank to keep current" : "Bearer token"}
-                  className={inputCls}
-                />
-              </Field>
-              {isEditing && (
-                <p className="text-muted-foreground -mt-2 text-[11.5px]">
-                  Leave fields blank to keep the saved credentials.
-                </p>
-              )}
-            </>
-          )}
+          <Field label="Application ID" error={form.formState.errors.appId?.message}>
+            <input
+              {...form.register("appId")}
+              placeholder={
+                isEditing
+                  ? "Leave blank to keep current"
+                  : "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              }
+              className={inputCls}
+            />
+          </Field>
+          <Field label="API Key (Read telemetry)" error={form.formState.errors.apiKey?.message}>
+            <input
+              {...form.register("apiKey")}
+              type="password"
+              placeholder={isEditing ? "Leave blank to keep current" : "Paste API key"}
+              className={inputCls}
+            />
+          </Field>
+          <p className="text-muted-foreground -mt-2 text-[11.5px]">
+            {isEditing ? (
+              "Leave both blank to keep the saved credentials, or enter both to replace them."
+            ) : (
+              <>
+                Azure Portal &rarr; App Insights &rarr; Configure &rarr; API Access. The
+                Application ID is the GUID on that blade &mdash; not the instrumentation key or
+                connection string.
+              </>
+            )}
+          </p>
 
           {source && (
             <div className="flex items-center gap-2">
