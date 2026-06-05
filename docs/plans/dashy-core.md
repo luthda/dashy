@@ -61,14 +61,19 @@ _Depends on: Phase 1_
 Define reusable filter combinations as tag chips. Enhances the log investigation workflow.
 _Depends on: Phase 2_
 
-- [ ] `/backend-engineer` — EF Core migration `CreateTagsTable`: `tags` table with UUID PK, `name`, `color`, `filters` (JSONB via `OwnsOne` + `ToJson`), `created_at`
-- [ ] `/backend-engineer` — `Tag` entity, `TagConfiguration`, `TagService` (CRUD), `TagEndpoints` (GET, POST, PUT, DELETE `/api/v1/tags`)
-- [ ] `/backend-engineer` — Integrate tag filters into `LogQueryService`: resolve `tagIds` → merge terms/levels/eventTypes into the query
-- [ ] `/backend-engineer` — Integration tests for tag CRUD and tag-filtered log queries
-- [ ] `/frontend-engineer` — Tag query/mutation hooks: `useTagsQuery`, `useCreateTag`, `useUpdateTag`, `useDeleteTag`
-- [ ] `/frontend-engineer` — TagsDialog: create/edit form with name, colour picker, multi-select for terms/levels/eventTypes (react-hook-form + zod)
-- [ ] `/frontend-engineer` — TagChipRow on Logs page: rendered as shadcn `Badge` components, click to toggle, active tags passed as `tagIds` in query (mockup: `logs.jsx` search bar area with tag chips like `env : prod`)
-- [ ] `/frontend-engineer` — Tags menu accessible from Logs page header
+> **Architecture note (ADR-004):** Tag entity lives in `Domain/Entities/`, service in
+> `Application/Services/`, endpoints in `Controllers/`, EF config in
+> `Infrastructure/Persistence/Configurations/`. Services use `DashyDbContext` directly
+> (no repository abstraction).
+
+- [x] `/backend-engineer` — `tags` table included in `InitialSchema` migration; `Tag` entity (`Domain/Entities/Tag.cs`), `TagConfiguration` (`Infrastructure/Persistence/Configurations/TagConfiguration.cs`)
+- [x] `/backend-engineer` — Tag filter integration in `LogQueryService.ResolveTagFiltersAsync` — resolves `tagIds` → merges terms/levels/eventTypes into the adapter query
+- [x] `/backend-engineer` — `TagService` (CRUD) in `Application/Services/TagService.cs`, `TagEndpoints` in `Controllers/TagEndpoints.cs` (GET, POST, PUT, DELETE `/api/v1/tags`), wired in `Program.cs`
+- [x] `/backend-engineer` — Integration tests for tag CRUD endpoints (`Integration/TagEndpointTests.cs`)
+- [x] `/frontend-engineer` — Tag query/mutation hooks: `useTagsQuery`, `useCreateTag`, `useUpdateTag`, `useDeleteTag`
+- [x] `/frontend-engineer` — TagsDialog: create/edit form with name, colour picker, multi-select for terms/levels/eventTypes (react-hook-form + zod)
+- [x] `/frontend-engineer` — TagChipRow on Logs page: rendered as shadcn `Badge` components, click to toggle, active tags passed as `tagIds` in query (mockup: `logs.jsx` search bar area with tag chips like `env : prod`)
+- [x] `/frontend-engineer` — Tags menu accessible from Logs page header
 
 ### Phase 4 — Saved Searches
 
@@ -137,6 +142,6 @@ Phase 0 (scaffolding)
 |---|---|---|---|
 | 1 | Loki auth: BasicAuth or Bearer token only? | Design doc Q1 | Phase 1 — Loki query client |
 | 2 | Max log rows per query? (affects pagination vs. virtual scroll) | Design doc Q2 | Phase 2 — LogTable (virtual scroll if > 500) |
-| 3 | Tag filter combination: AND or OR when multiple chips active? | Design doc Q3 | Phase 3 — tag filter integration in LogQueryService |
+| 3 | ~~Tag filter combination: AND or OR when multiple chips active?~~ **Resolved: OR.** Multiple active tags union their filters — wider selection, not narrower. Already implemented in `ResolveTagFiltersAsync`. | Design doc Q3 | ~~Phase 3~~ Done |
 | 4 | Design doc architecture says SQLite; rollout section and backend-engineer skill say PostgreSQL. Which is canonical? | Plan author | Phase 0 — DB setup. Plan assumes PostgreSQL per backend-engineer skill |
 | 5 | Credential encryption: AES-256-GCM (env var key) vs. .NET Data Protection API? | Design doc Q4 | Phase 0 — IEncryptionService. Plan assumes AES-256-GCM per backend-engineer skill |

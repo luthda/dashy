@@ -71,17 +71,14 @@ function SourceRow({ source, onEdit }: { source: Source; onEdit: () => void }) {
   return (
     <div className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card">
       <div
-        className="w-8 h-8 rounded-md grid place-items-center text-[10px] font-bold text-white flex-shrink-0"
-        style={{ background: source.type === "AppInsights" ? "var(--sev-info)" : "var(--sev-warn)" }}
+        className="w-8 h-8 rounded-md grid place-items-center text-[10px] font-bold text-white flex-shrink-0 bg-[var(--sev-info)]"
       >
-        {source.type === "AppInsights" ? "Az" : "Lo"}
+        Az
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="text-[13.5px] font-medium truncate">{source.name}</div>
-        <div className="text-[11.5px] text-muted-foreground">
-          {source.type === "AppInsights" ? "Azure App Insights" : "Grafana Loki"}
-        </div>
+        <div className="text-[11.5px] text-muted-foreground">Azure App Insights</div>
       </div>
 
       {/* Test result */}
@@ -125,7 +122,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
     <div className="flex flex-col items-center gap-3 py-16 text-center">
       <div className="text-[14px] font-medium">No sources yet</div>
       <p className="text-[12.5px] text-muted-foreground max-w-xs">
-        Connect Azure App Insights or Grafana Loki to start querying logs.
+        Connect Azure App Insights to start querying logs.
       </p>
       <button
         onClick={onAdd}

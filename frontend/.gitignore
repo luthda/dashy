@@ -1,0 +1,9 @@
+# Yarn Berry (node-modules linker) — keep the pinned release + config tracked,
+# ignore the generated cache and transient state.
+# https://yarnpkg.com/getting-started/qa#which-files-should-be-gitignored
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions

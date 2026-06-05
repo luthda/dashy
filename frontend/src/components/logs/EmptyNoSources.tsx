@@ -9,7 +9,7 @@ export function EmptyNoSources({ onAdd, children }: EmptyNoSourcesProps) {
       <div className="text-center">
         <div className="mb-1 text-[15px] font-semibold">No sources connected</div>
         <p className="text-muted-foreground mb-4 max-w-xs text-[12.5px]">
-          Connect Azure App Insights or Grafana Loki to start querying logs.
+          Connect Azure App Insights to start querying logs.
         </p>
         <button
           onClick={onAdd}

@@ -2,7 +2,6 @@
 
 export const SourceType = {
   AppInsights: "AppInsights",
-  Loki: "Loki",
 } as const
 
 export type SourceType = (typeof SourceType)[keyof typeof SourceType]
@@ -45,6 +44,20 @@ export interface TimeRange {
   to?: string
 }
 
+export interface Tag {
+  id: string
+  name: string
+  color: string
+  filters: TagFilters
+  createdAt: string
+}
+
+export interface TagFilters {
+  terms: string[]
+  levels: string[]
+  eventTypes: string[]
+}
+
 // ── Form / request types ────────────────────────────────────────────────────
 
 export interface AppInsightsConfig {
@@ -52,13 +65,7 @@ export interface AppInsightsConfig {
   apiKey: string
 }
 
-export interface LokiConfig {
-  baseUrl: string
-  orgId?: string
-  authToken?: string
-}
-
-export type SourceConfig = AppInsightsConfig | LokiConfig
+export type SourceConfig = AppInsightsConfig
 
 export const LEVELS = [
   { id: "error" as const, label: "Error", color: "var(--sev-error)" },

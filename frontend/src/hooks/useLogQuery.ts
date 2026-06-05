@@ -4,12 +4,12 @@ import { useMutation } from "@tanstack/react-query"
 
 interface LogQueryResponse {
   entries: LogEntry[]
-  totalCount: number
+  hasMore: boolean
 }
 
 export interface LogQueryState {
   data: LogEntry[] | null
-  totalCount: number
+  hasMore: boolean
   isLoading: boolean
   queryError: string | null    // 400 — invalid KQL, shown inline under SearchBar
   serverError: string | null   // 5xx — shown as toast
@@ -18,10 +18,10 @@ export interface LogQueryState {
 export function useLogQuery() {
   const mutation = useMutation({
     mutationFn: async (req: LogQueryRequest) => {
-      // The API may return either LogEntry[] (legacy) or { items, totalCount }
+      // The API may return either LogEntry[] (legacy) or { entries, hasMore }
       const raw = await api.post<LogEntry[] | LogQueryResponse>("/logs/query", req)
       if (Array.isArray(raw)) {
-        return { entries: raw, totalCount: raw.length }
+        return { entries: raw, hasMore: false }
       }
       return raw
     },
@@ -41,7 +41,7 @@ export function useLogQuery() {
 
   return {
     data: mutation.data?.entries ?? null,
-    totalCount: mutation.data?.totalCount ?? 0,
+    hasMore: mutation.data?.hasMore ?? false,
     isLoading: mutation.isPending,
     queryError,
     serverError,

@@ -28,8 +28,8 @@ public static class LogEndpoints
 
         try
         {
-            var entries = await svc.QueryAsync(request, ct);
-            return Results.Ok(new LogQueryResponse(entries, entries.Count));
+            var result = await svc.QueryAsync(request, ct);
+            return Results.Ok(new LogQueryResponse(result.Entries, result.HasMore));
         }
         catch (SourceNotFoundException ex)
         {
@@ -52,4 +52,4 @@ public static class LogEndpoints
     }
 }
 
-public record LogQueryResponse(List<LogEntry> Entries, int TotalCount);
+public record LogQueryResponse(List<LogEntry> Entries, bool HasMore);

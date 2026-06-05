@@ -1,19 +1,13 @@
 import { cn } from "@/lib/utils"
 import {
   ActivityIcon,
-  AlertTriangleIcon,
-  BarChart2Icon,
-  GitBranchIcon,
   ListIcon,
   SettingsIcon,
 } from "lucide-react"
 import { NavLink } from "react-router-dom"
 
 const NAV = [
-  { to: "/logs",    label: "Logs",    Icon: ListIcon },
-  { to: "/metrics", label: "Metrics", Icon: BarChart2Icon },
-  { to: "/traces",  label: "Traces",  Icon: GitBranchIcon },
-  { to: "/alerts",  label: "Alerts",  Icon: AlertTriangleIcon },
+  { to: "/logs", label: "Logs", Icon: ListIcon },
 ]
 
 interface SidebarProps {
