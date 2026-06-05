@@ -58,6 +58,13 @@ export interface TagFilters {
   eventTypes: string[]
 }
 
+export interface SavedSearch {
+  id: string
+  name: string
+  query: string
+  createdAt: string
+}
+
 // ── Form / request types ────────────────────────────────────────────────────
 
 export interface AppInsightsConfig {

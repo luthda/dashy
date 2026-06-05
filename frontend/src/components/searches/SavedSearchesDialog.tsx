@@ -1,0 +1,153 @@
+import { Field, inputCls } from "@/components/shared/Field"
+import {
+  useCreateSavedSearch,
+  useDeleteSavedSearch,
+  useSavedSearchesQuery,
+} from "@/hooks/useSavedSearches"
+import type { SavedSearch } from "@/lib/types"
+import { Loader2Icon, SearchIcon, Trash2Icon, XIcon } from "lucide-react"
+import { useState } from "react"
+
+interface SavedSearchesDialogProps {
+  /** The query string currently in the search bar — offered as the value to save. */
+  currentQuery: string
+  /** Load a saved search's string into the search bar and run it. */
+  onApply: (query: string) => void
+  onClose: () => void
+}
+
+export function SavedSearchesDialog({ currentQuery, onApply, onClose }: SavedSearchesDialogProps) {
+  const { data: searches } = useSavedSearchesQuery()
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-card border-border mx-4 w-full max-w-md rounded-xl border p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold">Saved searches</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <XIcon size={16} />
+          </button>
+        </div>
+
+        <SaveCurrent currentQuery={currentQuery} />
+
+        <div className="bg-border my-4 h-px" />
+
+        <SavedList
+          searches={searches ?? []}
+          onApply={(q) => {
+            onApply(q)
+            onClose()
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function SaveCurrent({ currentQuery }: { currentQuery: string }) {
+  const create = useCreateSavedSearch()
+  const [name, setName] = useState("")
+
+  const trimmedName = name.trim()
+  const canSave = trimmedName.length > 0 && !create.isPending
+
+  async function handleSave() {
+    if (!canSave) return
+    await create.mutateAsync({ name: trimmedName, query: currentQuery })
+    setName("")
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <Field label="Save current search" hint={currentQuery ? undefined : "empty query"}>
+        <div className="border-border bg-background flex items-center gap-2 rounded-md border px-2.5 py-1.5">
+          <SearchIcon size={13} className="text-muted-foreground shrink-0" />
+          <span className="text-foreground/80 truncate text-[12.5px]">
+            {currentQuery || <span className="text-muted-foreground/60">All logs (no filter)</span>}
+          </span>
+        </div>
+      </Field>
+
+      <div className="flex items-end gap-2">
+        <div className="flex-1">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                handleSave()
+              }
+            }}
+            placeholder="Name this search…"
+            className={inputCls + " w-full"}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!canSave}
+          className="bg-primary text-primary-foreground flex h-9 items-center gap-2 rounded-md px-4 text-[13px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          {create.isPending && <Loader2Icon size={13} className="animate-spin" />}
+          Save
+        </button>
+      </div>
+
+      {create.error && (
+        <p className="text-[12px] text-[var(--sev-error)]">{create.error.message}</p>
+      )}
+    </div>
+  )
+}
+
+function SavedList({
+  searches,
+  onApply,
+}: {
+  searches: SavedSearch[]
+  onApply: (query: string) => void
+}) {
+  const deleteSearch = useDeleteSavedSearch()
+
+  if (searches.length === 0) {
+    return (
+      <p className="text-muted-foreground py-4 text-center text-[13px]">
+        No saved searches yet. Name a search above to recall it later.
+      </p>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-muted-foreground mb-0.5 text-[12.5px] font-medium">History</span>
+      {searches.map((s) => (
+        <div
+          key={s.id}
+          className="border-border hover:bg-accent group flex items-center gap-2.5 rounded-lg border px-3 py-2"
+        >
+          <button
+            type="button"
+            onClick={() => onApply(s.query)}
+            className="flex min-w-0 flex-1 flex-col items-start text-left"
+          >
+            <span className="text-[13px] font-medium">{s.name}</span>
+            <span className="text-muted-foreground truncate text-[11.5px]">
+              {s.query || "All logs (no filter)"}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => deleteSearch.mutate(s.id)}
+            disabled={deleteSearch.isPending}
+            className="text-muted-foreground shrink-0 hover:text-[var(--sev-error)]"
+            title="Delete saved search"
+          >
+            <Trash2Icon size={13} />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
