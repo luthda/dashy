@@ -3,10 +3,14 @@ import { HistogramPanel } from "@/components/logs/HistogramPanel"
 import { LogStream } from "@/components/logs/LogStream"
 import { Pagination } from "@/components/logs/Pagination"
 import { SearchBar } from "@/components/logs/SearchBar"
+import { TagChipRow } from "@/components/logs/TagChipRow"
 import { SourceSetupDialog } from "@/components/sources/SourceSetupDialog"
+import { TagsDialog } from "@/components/tags/TagsDialog"
 import { useLogQuery } from "@/hooks/useLogQuery"
 import { useSourcesQuery } from "@/hooks/useSources"
+import { useTagsQuery } from "@/hooks/useTags"
 import { EVENT_TYPES, LEVELS, type Range } from "@/lib/types"
+import { TagIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 const DEFAULT_RANGE: Range = "1h"
@@ -15,6 +19,7 @@ const PAGE = 500
 
 export function LogsPage() {
   const { data: sources } = useSourcesQuery()
+  const { data: tags } = useTagsQuery()
   const [sourceId, setSourceId] = useState("")
   const [query, setQuery] = useState("")
   const [range, setRange] = useState<Range>(DEFAULT_RANGE)
@@ -25,21 +30,24 @@ export function LogsPage() {
   const [activeEventTypes, setActiveEventTypes] = useState<Set<string>>(
     () => new Set(EVENT_TYPES.map((e) => e.id)),
   )
+  const [activeTagIds, setActiveTagIds] = useState<Set<string>>(new Set())
   const [groupBy, setGroupBy] = useState<"level" | "eventType">("level")
   const [page, setPage] = useState(0)
   const [showAddSource, setShowAddSource] = useState(false)
+  const [showTagsDialog, setShowTagsDialog] = useState(false)
   const { data, totalCount, isLoading, queryError, serverError, run } = useLogQuery()
 
   const runQuery = useCallback(
     (p: number = page) => {
       if (!sourceId) return
       const evtFilter = activeEventTypes.size < EVENT_TYPES.length ? [...activeEventTypes] : undefined
+      const tagIds = activeTagIds.size > 0 ? [...activeTagIds] : undefined
       run({
-        sourceId, query: query || undefined, eventTypes: evtFilter,
+        sourceId, query: query || undefined, eventTypes: evtFilter, tagIds,
         timeRange: { type: "relative", value: range }, limit: PAGE, skip: p * PAGE,
       })
     },
-    [sourceId, query, range, activeEventTypes, page, run],
+    [sourceId, query, range, activeEventTypes, activeTagIds, page, run],
   )
 
   useEffect(() => { if (sources?.length && !sourceId) setSourceId(sources[0].id) }, [sources, sourceId])
@@ -87,17 +95,44 @@ export function LogsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 p-[18px_22px]">
-      <SearchBar
-        query={query}
-        onQueryChange={setQuery}
-        range={range}
-        onRangeChange={(r) => { setRange(r); setPage(0) }}
-        live={live}
-        onLiveToggle={() => setLive((v) => !v)}
-        onRefresh={() => runQuery(page)}
-        error={queryError ?? serverError}
-        isLoading={isLoading}
-      />
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <SearchBar
+            query={query}
+            onQueryChange={setQuery}
+            range={range}
+            onRangeChange={(r) => { setRange(r); setPage(0) }}
+            live={live}
+            onLiveToggle={() => setLive((v) => !v)}
+            onRefresh={() => runQuery(page)}
+            error={queryError ?? serverError}
+            isLoading={isLoading}
+          />
+        </div>
+        <button
+          onClick={() => setShowTagsDialog(true)}
+          title="Manage tags"
+          className="text-muted-foreground hover:text-foreground flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
+        >
+          <TagIcon size={16} />
+        </button>
+      </div>
+
+      {(tags ?? []).length > 0 && (
+        <TagChipRow
+          tags={tags ?? []}
+          activeTagIds={activeTagIds}
+          onToggle={(id) => {
+            setActiveTagIds((prev) => {
+              const next = new Set(prev)
+              next.has(id) ? next.delete(id) : next.add(id)
+              return next
+            })
+          }}
+        />
+      )}
+
+      {showTagsDialog && <TagsDialog onClose={() => setShowTagsDialog(false)} />}
 
       {sources.length > 1 && (
         <div className="flex items-center gap-2">

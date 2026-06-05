@@ -45,6 +45,20 @@ export interface TimeRange {
   to?: string
 }
 
+export interface Tag {
+  id: string
+  name: string
+  color: string
+  filters: TagFilters
+  createdAt: string
+}
+
+export interface TagFilters {
+  terms: string[]
+  levels: string[]
+  eventTypes: string[]
+}
+
 // ── Form / request types ────────────────────────────────────────────────────
 
 export interface AppInsightsConfig {
