@@ -26,7 +26,22 @@ public class KqlBuilderTests
     public void BuildKql_FreeTextOnly_ContainsContainsClause()
     {
         var kql = AppInsightsAdapter.BuildKql("winfap", null, TagFilters.Empty, 100);
-        kql.Should().Contain("eventMessage contains \"winfap\"");
+        // Substring match across ALL columns (not just eventMessage)
+        kql.Should().Contain("where * contains \"winfap\"");
+    }
+
+    [Fact]
+    public void BuildKql_TextFilter_AppliedInsideSubqueryBeforeTop()
+    {
+        var kql = AppInsightsAdapter.BuildKql("winfap", null, TagFilters.Empty, 100);
+
+        // The filter must run before the per-table `top` truncation, otherwise
+        // matches outside the newest-N window are silently dropped.
+        var filterIdx = kql.IndexOf("where * contains \"winfap\"", StringComparison.Ordinal);
+        var firstTopIdx = kql.IndexOf("top 100 by timestamp desc", StringComparison.Ordinal);
+
+        filterIdx.Should().BeGreaterThan(0);
+        filterIdx.Should().BeLessThan(firstTopIdx);
     }
 
     [Fact]
@@ -78,7 +93,7 @@ public class KqlBuilderTests
         var kql = AppInsightsAdapter.BuildKql("winfap", null, tags, 500,
             eventTypes: [EventType.Exception]);
 
-        kql.Should().Contain("eventMessage contains \"winfap\"");
+        kql.Should().Contain("where * contains \"winfap\"");
         kql.Should().Contain("severityLevel in (3)");
         kql.Should().Contain("exceptions");
         kql.Should().Contain("limit 500");
@@ -130,6 +145,6 @@ public class KqlBuilderTests
         var tags = new TagFilters(["error-code-42"], [], []);
         var kql = AppInsightsAdapter.BuildKql(null, null, tags, 100);
 
-        kql.Should().Contain("eventMessage contains \"error-code-42\"");
+        kql.Should().Contain("where * contains \"error-code-42\"");
     }
 }

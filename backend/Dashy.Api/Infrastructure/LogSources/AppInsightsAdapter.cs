@@ -115,12 +115,27 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         // Determine which tables to include
         var tables = ResolveTableNames(eventTypes, tags.EventTypes);
 
+        // Substring text filters (free-text box + tag terms) scan ALL columns —
+        // including customDimensions and operation/role names — not just the
+        // synthesized eventMessage. They are applied INSIDE each table subquery,
+        // BEFORE the per-table `top`, so rows matching outside the newest-N window
+        // are not truncated away before the filter ever runs.
+        var textTerms = new List<string>();
+        if (!string.IsNullOrWhiteSpace(freeText))
+        {
+            textTerms.Add(freeText);
+        }
+        textTerms.AddRange(tags.Terms);
+
+        var textFilter = string.Concat(
+            textTerms.Select(t => $"\n   | where * contains \"{EscapeKql(t)}\""));
+
         // Limit EACH table to `limit` rows *before* the union. Without this, a
         // single high-volume table (e.g. dependencies) consumes the entire global
         // limit and starves low-volume-but-important tables like exceptions — they
         // exist but never appear in the newest-N time-ordered window.
         var projections = tables
-            .Select(t => $"({TableProjections[t]}\n   | top {limit} by timestamp desc)")
+            .Select(t => $"({TableProjections[t]}{textFilter}\n   | top {limit} by timestamp desc)")
             .ToList();
 
         if (projections.Count == 1)
@@ -143,12 +158,10 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
           .Append("exAssembly = column_ifexists(\"exAssembly\", \"\"), ")
           .Append("exInnermostMessage = column_ifexists(\"exInnermostMessage\", \"\")");
 
+        // Post-union clauses. Levels stay here because severityLevel is synthesized
+        // per table (via column_ifexists in the project above) and only exists after
+        // the union. Term/free-text filters are applied per-table above, before `top`.
         var clauses = new List<string>();
-
-        if (!string.IsNullOrWhiteSpace(freeText))
-        {
-            clauses.Add($"eventMessage contains \"{EscapeKql(freeText)}\"");
-        }
 
         if (tags.Levels.Count > 0)
         {
@@ -163,11 +176,6 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
             {
                 clauses.Add($"severityLevel in ({string.Join(", ", levelInts)})");
             }
-        }
-
-        foreach (var term in tags.Terms)
-        {
-            clauses.Add($"eventMessage contains \"{EscapeKql(term)}\"");
         }
 
         if (timeRange?.Type == "absolute" && timeRange.From.HasValue && timeRange.To.HasValue)
