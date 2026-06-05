@@ -71,8 +71,7 @@ function SourceRow({ source, onEdit }: { source: Source; onEdit: () => void }) {
   return (
     <div className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card">
       <div
-        className="w-8 h-8 rounded-md grid place-items-center text-[10px] font-bold text-white flex-shrink-0"
-        style={{ background: "var(--sev-info)" }}
+        className="w-8 h-8 rounded-md grid place-items-center text-[10px] font-bold text-white flex-shrink-0 bg-[var(--sev-info)]"
       >
         Az
       </div>

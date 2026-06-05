@@ -50,18 +50,18 @@ public static class TagEndpoints
         return deleted ? Results.NoContent() : Results.NotFound();
     }
 
-    private static TagResponse ToResponse(Tag t) => new(
-        Id: t.Id,
-        Name: t.Name,
-        Color: t.Color,
-        Filters: JsonSerializer.Deserialize<TagFiltersDto>(t.Filters) ?? new TagFiltersDto(),
-        CreatedAt: t.CreatedAt
-    );
-}
+    private static TagResponse ToResponse(Tag t)
+    {
+        TagFiltersDto filters;
+        try
+        {
+            filters = JsonSerializer.Deserialize<TagFiltersDto>(t.Filters) ?? new TagFiltersDto();
+        }
+        catch (JsonException)
+        {
+            filters = new TagFiltersDto();
+        }
 
-public record TagResponse(
-    Guid Id,
-    string Name,
-    string Color,
-    TagFiltersDto Filters,
-    DateTime CreatedAt);
+        return new TagResponse(t.Id, t.Name, t.Color, filters, t.CreatedAt);
+    }
+}

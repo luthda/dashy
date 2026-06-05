@@ -8,8 +8,6 @@ interface TagChipRowProps {
 }
 
 export function TagChipRow({ tags, activeTagIds, onToggle }: TagChipRowProps) {
-  if (tags.length === 0) return null
-
   return (
     <div className="flex flex-wrap gap-1.5">
       {tags.map((tag) => {

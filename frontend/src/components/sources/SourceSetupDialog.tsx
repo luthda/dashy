@@ -1,3 +1,4 @@
+import { Field, inputCls } from "@/components/shared/Field"
 import { useCreateSource, useTestConnection, useUpdateSource } from "@/hooks/useSources"
 import { SourceType, type Source } from "@/lib/types"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -13,8 +14,8 @@ const createSchema = z.object({
 
 const editSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  appId: z.string().optional(),
-  apiKey: z.string().optional(),
+  appId: z.string().default(""),
+  apiKey: z.string().default(""),
 })
 
 type SourceForm = {
@@ -31,9 +32,9 @@ interface SourceSetupDialogProps {
 export function SourceSetupDialog({ source, onClose }: SourceSetupDialogProps) {
   const isEditing = Boolean(source)
 
+  const schema = isEditing ? editSchema : createSchema
   const form = useForm<SourceForm>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver((isEditing ? editSchema : createSchema) as any),
+    resolver: zodResolver(schema),
     defaultValues: {
       name: source?.name ?? "",
       appId: "",
@@ -160,23 +161,3 @@ export function SourceSetupDialog({ source, onClose }: SourceSetupDialogProps) {
   )
 }
 
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string
-  error?: string
-  children: React.ReactNode
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-muted-foreground text-[12.5px] font-medium">{label}</span>
-      {children}
-      {error && <span className="text-[11.5px] text-[var(--sev-error)]">{error}</span>}
-    </label>
-  )
-}
-
-const inputCls =
-  "h-9 px-3 rounded-md border border-border bg-background text-[13.5px] outline-none focus:ring-2 focus:ring-ring transition-shadow placeholder:text-muted-foreground/60"

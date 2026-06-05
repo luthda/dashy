@@ -82,3 +82,10 @@ public record UpdateTagRequest(
     string? Name,
     string? Color,
     TagFiltersDto? Filters);
+
+public record TagResponse(
+    Guid Id,
+    string Name,
+    string Color,
+    TagFiltersDto Filters,
+    DateTime CreatedAt);

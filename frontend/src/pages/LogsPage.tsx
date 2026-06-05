@@ -52,6 +52,7 @@ export function LogsPage() {
 
   useEffect(() => { if (sources?.length && !sourceId) setSourceId(sources[0].id) }, [sources, sourceId])
 
+  // Ref-tracking: runs every render, compares refs to detect changes and auto-requery
   const prevSourceId = useRef(sourceId)
   const prevRange = useRef(range)
   const prevTagIds = useRef(activeTagIds)
