@@ -6,7 +6,7 @@ import {
 } from "@/hooks/useSavedSearches"
 import type { SavedSearch } from "@/lib/types"
 import { Loader2Icon, SearchIcon, Trash2Icon, XIcon } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 interface SavedSearchesDialogProps {
   /** The query string currently in the search bar — offered as the value to save. */
@@ -19,9 +19,17 @@ interface SavedSearchesDialogProps {
 export function SavedSearchesDialog({ currentQuery, onApply, onClose }: SavedSearchesDialogProps) {
   const { data: searches } = useSavedSearchesQuery()
 
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", handleKey)
+    return () => document.removeEventListener("keydown", handleKey)
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-card border-border mx-4 w-full max-w-md rounded-xl border p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-card border-border mx-4 w-full max-w-md rounded-xl border p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-[15px] font-semibold">Saved searches</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
@@ -121,7 +129,7 @@ function SavedList({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-muted-foreground mb-0.5 text-[12.5px] font-medium">History</span>
+      <span className="text-muted-foreground mb-0.5 text-[12.5px] font-medium">Saved</span>
       {searches.map((s) => (
         <div
           key={s.id}

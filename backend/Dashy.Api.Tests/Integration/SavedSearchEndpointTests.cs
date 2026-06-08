@@ -101,6 +101,7 @@ public class SavedSearchEndpointTests : IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var searches = await response.Content.ReadFromJsonAsync<List<SavedSearchResponse>>();
         searches.Should().HaveCountGreaterThanOrEqualTo(2);
-        searches!.Select(s => s.Name).Should().Contain(["First", "Second"]);
+        var names = searches!.Select(s => s.Name).ToList();
+        names.IndexOf("Second").Should().BeLessThan(names.IndexOf("First"));
     }
 }

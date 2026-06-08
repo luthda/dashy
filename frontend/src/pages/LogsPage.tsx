@@ -49,7 +49,8 @@ export function LogsPage() {
         timeRange: { type: "relative", value: range }, limit: PAGE, skip: p * PAGE,
       })
     },
-    [sourceId, query, range, activeEventTypes, activeTagIds, page, run],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `query` is intentionally captured as a default; callers like applySavedSearch pass `q` explicitly
+    [sourceId, range, activeEventTypes, activeTagIds, page, run],
   )
 
   // Load a saved search string into the bar and run it immediately. `query` state
@@ -125,14 +126,14 @@ export function LogsPage() {
         <button
           onClick={() => setShowSavedSearches(true)}
           title="Saved searches"
-          className="text-muted-foreground hover:text-foreground flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
+          className="text-muted-foreground hover:text-foreground hover:border-border flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
         >
           <BookmarkIcon size={16} />
         </button>
         <button
           onClick={() => setShowTagsDialog(true)}
           title="Manage tags"
-          className="text-muted-foreground hover:text-foreground flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
+          className="text-muted-foreground hover:text-foreground hover:border-border flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
         >
           <TagIcon size={16} />
         </button>
