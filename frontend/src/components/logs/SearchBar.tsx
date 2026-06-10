@@ -67,18 +67,19 @@ export function SearchBar({
           ))}
         </div>
 
-        <button
-          onClick={onLiveToggle}
-          className={cn(
-            "flex h-[38px] items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium",
-            live
-              ? "border-[color-mix(in_oklch,var(--sev-success)_35%,transparent)] text-[var(--sev-success)]"
-              : "border-border text-muted-foreground",
-          )}
-        >
-          {live ? <span className="live-dot" /> : null}
-          {live ? "Live" : "Paused"}
-        </button>
+        <div className="bg-muted inline-flex rounded-lg p-[3px]">
+          <button
+            onClick={onLiveToggle}
+            title={live ? "Live updates on — click to pause" : "Live updates paused — click to resume"}
+            className={cn(
+              "bg-background flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium shadow-sm",
+              live ? "text-[var(--sev-success)]" : "text-[var(--sev-error)]",
+            )}
+          >
+            <span className={live ? "live-dot" : "paused-dot"} />
+            {live ? "Live" : "Paused"}
+          </button>
+        </div>
 
         <button
           onClick={onRefresh}

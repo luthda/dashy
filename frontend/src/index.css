@@ -32,6 +32,7 @@
   --color-sev-info:    var(--sev-info);
   --color-sev-debug:   var(--sev-debug);
   --color-sev-trace:   var(--sev-trace);
+  --color-sev-success: var(--sev-success);
 
   /* Event type colours */
   --color-evt-trace:        var(--evt-trace);
@@ -78,6 +79,7 @@
   --sev-info:   oklch(0.6 0.18 245);
   --sev-debug:  oklch(0.65 0.14 290);
   --sev-trace:  oklch(0.6 0.01 260);
+  --sev-success: oklch(0.6 0.16 150);
 
   --evt-trace:        oklch(0.65 0.19 155);
   --evt-request:      oklch(0.6 0.18 245);
@@ -116,6 +118,7 @@
   --sev-info:   oklch(0.7 0.16 245);
   --sev-debug:  oklch(0.72 0.12 290);
   --sev-trace:  oklch(0.6 0.01 260);
+  --sev-success: oklch(0.7 0.15 152);
 
   --evt-trace:        oklch(0.72 0.17 155);
   --evt-request:      oklch(0.7 0.16 245);
@@ -142,4 +145,27 @@ body {
   height: 100dvh;
   display: flex;
   flex-direction: column;
+}
+
+/* Live-update status dots (SearchBar Live/Paused chip) */
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--sev-success);
+  box-shadow: 0 0 0 0 color-mix(in oklch, var(--sev-success) 70%, transparent);
+  animation: livePulse 1.8s infinite;
+}
+
+@keyframes livePulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in oklch, var(--sev-success) 60%, transparent); }
+  70%  { box-shadow: 0 0 0 5px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+
+.paused-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 99px;
+  background: var(--sev-error);
 }

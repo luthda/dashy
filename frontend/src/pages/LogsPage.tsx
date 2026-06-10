@@ -15,7 +15,7 @@ import { BookmarkIcon, TagIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 const DEFAULT_RANGE: Range = "1h"
-const LIVE_MS = 30_000
+const LIVE_MS = 60_000
 const PAGE = 500
 
 export function LogsPage() {
@@ -24,7 +24,7 @@ export function LogsPage() {
   const [sourceId, setSourceId] = useState("")
   const [query, setQuery] = useState("")
   const [range, setRange] = useState<Range>(DEFAULT_RANGE)
-  const [live, setLive] = useState(false)
+  const [live, setLive] = useState(true)
   const [activeLevels, setActiveLevels] = useState<Set<string>>(
     () => new Set(LEVELS.map((l) => l.id)),
   )
