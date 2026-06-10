@@ -49,8 +49,7 @@ export function LogsPage() {
         timeRange: { type: "relative", value: range }, limit: PAGE, skip: p * PAGE,
       })
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `query` is intentionally captured as a default; callers like applySavedSearch pass `q` explicitly
-    [sourceId, range, activeEventTypes, activeTagIds, page, run],
+    [sourceId, range, activeEventTypes, activeTagIds, page, query, run],
   )
 
   // Load a saved search string into the bar and run it immediately. `query` state
@@ -114,7 +113,7 @@ export function LogsPage() {
           <SearchBar
             query={query}
             onQueryChange={setQuery}
-            onSearch={() => { setPage(0); runQuery(0) }}
+            onSearch={() => { setPage(0); runQuery(0, query) }}
             range={range}
             onRangeChange={(r) => { setRange(r); setPage(0) }}
             live={live}

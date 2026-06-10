@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils"
 import {
-  ActivityIcon,
   ListIcon,
   SettingsIcon,
 } from "lucide-react"
@@ -25,9 +24,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
     >
       {/* Brand */}
       <div className="h-14 flex items-center gap-2.5 px-4 flex-shrink-0">
-        <div className="w-6 h-6 rounded-lg bg-primary text-primary-foreground grid place-items-center flex-shrink-0">
-          <ActivityIcon size={14} strokeWidth={2.6} />
-        </div>
+        <img src="/favicon.svg" alt="" className="w-6 h-6 flex-shrink-0" />
         <span className="font-semibold text-[15px] tracking-tight">Dashy</span>
       </div>
 
