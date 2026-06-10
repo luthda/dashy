@@ -114,6 +114,7 @@ export function LogsPage() {
           <SearchBar
             query={query}
             onQueryChange={setQuery}
+            onSearch={() => { setPage(0); runQuery(0) }}
             range={range}
             onRangeChange={(r) => { setRange(r); setPage(0) }}
             live={live}
