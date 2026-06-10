@@ -2,6 +2,15 @@
 
 _Date: 2026-06-10_
 
+> **Revision (2026-06-10, PR #18 review):** the per-alert check interval
+> (`check_interval_seconds`) was removed. Every enabled alert is checked on the
+> standard 60-second polling tick — the same cadence as the frontend's live
+> mode. The poll window is `(last_checked_at, now]` filtered on
+> **`ingestion_time()`** (not `timestamp`), so App Insights ingestion lag can no
+> longer cause firings to be missed. Threshold, enabled flag, and all other
+> behaviour are unchanged. References to a configurable interval below are
+> historical.
+
 ---
 
 ## Problem Statement
@@ -245,14 +254,12 @@ Dashy.Api/
 
 ```
 Loop every 60s:
-  Load all enabled alerts where
-    last_checked_at IS NULL OR
-    last_checked_at + check_interval_seconds <= now()
-  For each due alert:
-    windowStart = now - check_interval_seconds
+  Load all enabled alerts
+  For each alert:
+    windowStart = last_checked_at ?? now - 60s   (windows tile across polls)
     windowEnd   = now
-    Try: execute alert.Query via LogQueryService with [windowStart, windowEnd]
-         (same proxy path as /logs/query, time range injected by the service)
+    Try: execute count query via the source adapter, filtered on
+         ingestion_time() in (windowStart, windowEnd]
     If resultCount >= threshold:
       Insert AlertFiring(alertId, firedAt=now, resultCount)
       Update alert: status=Firing, resolved_at=null, last_checked_at=now
@@ -264,10 +271,11 @@ Loop every 60s:
       Update alert: status=Error, last_checked_at=now
 ```
 
-The time window is always `[now - check_interval_seconds, now]` — evaluated fresh each poll. This means:
-- Each log entry is evaluated at most once per alert (it falls out of the window after one interval)
-- After "Resolved", the next poll only covers new logs since that moment — stale logs cannot re-trigger the alert
-- No `last_seen_log_id` or watermark is needed; the time window is the state
+The windows tile: each poll covers exactly `(last_checked_at, now]`, half-open. This means:
+- Each ingested log entry is counted exactly once per alert — no gaps, no double counting
+- After "Resolved", subsequent polls only cover newly ingested logs — stale logs cannot re-trigger the alert
+- Filtering on `ingestion_time()` instead of `timestamp` makes the window immune to App Insights ingestion lag (minutes), which would otherwise silently skip events whose timestamp window had already passed
+- No `last_seen_log_id` or watermark is needed; `last_checked_at` is the state
 
 **`AlertService.BuildQueryFromTag`:**
 - Accepts `Tag` (with `Filters` JSONB) and `Source` (with `Type = app_insights`)

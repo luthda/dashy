@@ -9,12 +9,6 @@ const STATUS_STYLES: Record<AlertStatus, { label: string; cls: string }> = {
   Error: { label: "Error", cls: "text-[var(--sev-warn)] bg-[var(--sev-warn)]/10" },
 }
 
-function formatInterval(seconds: number) {
-  return seconds % 3600 === 0 && seconds >= 3600
-    ? `${seconds / 3600} h`
-    : `${Math.round(seconds / 60)} min`
-}
-
 interface AlertListProps {
   alerts: Alert[]
   onEdit: (alert: Alert) => void
@@ -58,10 +52,6 @@ function AlertRow({ alert, onEdit }: { alert: Alert; onEdit: () => void }) {
         )}
       >
         {status.label}
-      </span>
-
-      <span className="text-muted-foreground w-16 text-right font-mono text-[11.5px] whitespace-nowrap">
-        {formatInterval(alert.checkIntervalSeconds)}
       </span>
 
       <span

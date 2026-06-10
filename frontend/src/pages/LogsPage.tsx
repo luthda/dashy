@@ -15,15 +15,26 @@ import { BookmarkIcon, TagIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 const DEFAULT_RANGE: Range = "1h"
+const SOURCE_STORAGE_KEY = "dashy-source"
 const LIVE_MS = 60_000
 const PAGE = 500
 
 export function LogsPage() {
   const { data: sources } = useSourcesQuery()
   const { data: tags } = useTagsQuery()
-  // The user's explicit selection; falls back to the first source once loaded.
-  const [selectedSourceId, setSelectedSourceId] = useState("")
-  const sourceId = selectedSourceId || sources?.[0]?.id || ""
+  // The user's explicit selection, persisted across navigation and reloads.
+  // Falls back to the first source when nothing is stored or the stored
+  // source no longer exists.
+  const [selectedSourceId, setSelectedSourceId] = useState(
+    () => localStorage.getItem(SOURCE_STORAGE_KEY) ?? "",
+  )
+  const sourceId =
+    (sources?.some((s) => s.id === selectedSourceId) ? selectedSourceId : sources?.[0]?.id) ?? ""
+
+  function selectSource(id: string) {
+    setSelectedSourceId(id)
+    localStorage.setItem(SOURCE_STORAGE_KEY, id)
+  }
   const [query, setQuery] = useState("")
   // The last query actually submitted (Enter / saved search). Live ticks and
   // pagination re-run this, not the half-typed text in the search box.
@@ -178,7 +189,7 @@ export function LogsPage() {
           <span className="text-muted-foreground text-[12px]">Source:</span>
           <select
             value={sourceId}
-            onChange={(e) => setSelectedSourceId(e.target.value)}
+            onChange={(e) => selectSource(e.target.value)}
             className="border-border bg-background h-8 rounded-md border px-2 text-[12.5px] outline-none"
           >
             {sources.map((s) => (

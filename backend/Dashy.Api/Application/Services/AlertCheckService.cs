@@ -5,8 +5,11 @@ using Dashy.Api.Infrastructure.Persistence;
 namespace Dashy.Api.Application.Services;
 
 /// <summary>
-/// Per-alert poll logic, extracted from the background service so it can be
-/// unit-tested with a real DbContext and fake adapter/broadcaster.
+/// Production poll logic for a single alert: runs the stored count query over
+/// the window since the previous check, updates status / firing history, and
+/// broadcasts firings. Called by <see cref="AlertPollingService"/> on every
+/// tick — kept as a plain scoped class (rather than logic inside the
+/// BackgroundService) so it can be resolved per tick and tested in isolation.
 /// </summary>
 public class AlertCheckService(
     DashyDbContext db,
@@ -19,10 +22,12 @@ public class AlertCheckService(
     {
         try
         {
-            // The window covers only the last check interval, evaluated fresh each
-            // poll — after "Resolved", old logs fall out of the window and cannot
-            // re-trigger the alert; only new logs can.
-            var windowStart = now.AddSeconds(-alert.CheckIntervalSeconds);
+            // Windows tile across polls: (LastCheckedAt, now], so each entry is
+            // counted exactly once and — after "Resolved" — old logs cannot
+            // re-trigger the alert; only new ones can. First check falls back to
+            // one tick interval.
+            var windowStart = alert.LastCheckedAt
+                ?? now.AddSeconds(-AlertPollingService.TickIntervalSeconds);
 
             var adapter = adapterFactory.GetAdapter(alert.Source.Type);
             var configJson = sourceService.DecryptConfig(alert.Source);

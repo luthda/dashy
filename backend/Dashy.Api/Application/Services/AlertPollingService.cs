@@ -7,7 +7,10 @@ public class AlertPollingService(
     IServiceScopeFactory scopeFactory,
     ILogger<AlertPollingService> logger) : BackgroundService
 {
-    private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(60);
+    /// <summary>Every enabled alert is checked once per tick — same cadence as the frontend's live mode.</summary>
+    public const int TickIntervalSeconds = 60;
+
+    private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(TickIntervalSeconds);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -41,14 +44,7 @@ public class AlertPollingService(
             .Where(a => a.Enabled)
             .ToListAsync(ct);
 
-        // Due-filter in memory: SQLite can't translate AddSeconds with a column
-        // argument, and the alerts table is tiny.
-        var dueAlerts = enabledAlerts
-            .Where(a => a.LastCheckedAt is null
-                || a.LastCheckedAt.Value.AddSeconds(a.CheckIntervalSeconds) <= now)
-            .ToList();
-
-        foreach (var alert in dueAlerts)
+        foreach (var alert in enabledAlerts)
         {
             await checker.CheckAsync(alert, now, ct);
         }

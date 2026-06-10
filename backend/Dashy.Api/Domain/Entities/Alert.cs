@@ -9,7 +9,6 @@ public class Alert
     public Source Source { get; set; } = null!;
 
     public string Query { get; set; } = "";
-    public int CheckIntervalSeconds { get; set; } = 300;
     public int Threshold { get; set; } = 1;
     public bool Enabled { get; set; } = true;
 

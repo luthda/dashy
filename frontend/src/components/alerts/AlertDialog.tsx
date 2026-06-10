@@ -11,14 +11,6 @@ import { useEffect, useState } from "react"
 import { useForm, useWatch } from "react-hook-form"
 import { z } from "zod"
 
-const INTERVALS = [
-  { seconds: 60, label: "1 min" },
-  { seconds: 300, label: "5 min" },
-  { seconds: 900, label: "15 min" },
-  { seconds: 1800, label: "30 min" },
-  { seconds: 3600, label: "60 min" },
-]
-
 const alertSchema = z
   .object({
     name: z.string().min(1, "Name is required"),
@@ -26,7 +18,6 @@ const alertSchema = z
     mode: z.enum(["query", "tag"]),
     query: z.string(),
     tagId: z.string(),
-    checkIntervalSeconds: z.number().int().min(60),
     threshold: z.number().int().min(1, "Threshold must be at least 1"),
     enabled: z.boolean(),
   })
@@ -41,13 +32,13 @@ const alertSchema = z
 
 type AlertFormData = z.infer<typeof alertSchema>
 
-interface AlertSlideoverProps {
+interface AlertDialogProps {
   /** null = create mode */
   alert: Alert | null
   onClose: () => void
 }
 
-export function AlertSlideover({ alert, onClose }: AlertSlideoverProps) {
+export function AlertDialog({ alert, onClose }: AlertDialogProps) {
   const { data: sources } = useSourcesQuery()
   const { data: tags } = useTagsQuery()
   const createAlert = useCreateAlert()
@@ -64,7 +55,6 @@ export function AlertSlideover({ alert, onClose }: AlertSlideoverProps) {
       mode: "query",
       query: alert?.query ?? "",
       tagId: "",
-      checkIntervalSeconds: alert?.checkIntervalSeconds ?? 300,
       threshold: alert?.threshold ?? 1,
       enabled: alert?.enabled ?? true,
     },
@@ -89,7 +79,6 @@ export function AlertSlideover({ alert, onClose }: AlertSlideoverProps) {
       sourceId: data.sourceId,
       query: data.mode === "query" ? data.query : undefined,
       tagId: data.mode === "tag" ? data.tagId : undefined,
-      checkIntervalSeconds: data.checkIntervalSeconds,
       threshold: data.threshold,
       enabled: data.enabled,
     }
@@ -113,9 +102,9 @@ export function AlertSlideover({ alert, onClose }: AlertSlideoverProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-card border-border flex h-full w-full max-w-md flex-col overflow-y-auto border-l p-6 shadow-xl"
+        className="bg-card border-border mx-4 max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
@@ -182,27 +171,14 @@ export function AlertSlideover({ alert, onClose }: AlertSlideoverProps) {
             </Field>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Check interval">
-              <select
-                {...form.register("checkIntervalSeconds", { valueAsNumber: true })}
-                className={inputCls}
-              >
-                {INTERVALS.map((i) => (
-                  <option key={i.seconds} value={i.seconds}>{i.label}</option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Threshold" hint="≥ N results" error={form.formState.errors.threshold?.message}>
-              <input
-                type="number"
-                min={1}
-                {...form.register("threshold", { valueAsNumber: true })}
-                className={inputCls}
-              />
-            </Field>
-          </div>
+          <Field label="Threshold" hint="fires at ≥ N results per check" error={form.formState.errors.threshold?.message}>
+            <input
+              type="number"
+              min={1}
+              {...form.register("threshold", { valueAsNumber: true })}
+              className={inputCls}
+            />
+          </Field>
 
           <label className="flex items-center gap-2 text-[13px]">
             <input type="checkbox" {...form.register("enabled")} className="accent-primary h-4 w-4" />

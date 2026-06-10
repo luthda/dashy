@@ -66,7 +66,6 @@ export interface Alert {
   sourceId: string
   sourceName: string
   query: string
-  checkIntervalSeconds: number
   threshold: number
   enabled: boolean
   lastCheckedAt: string | null
@@ -86,7 +85,6 @@ export interface AlertUpsertRequest {
   sourceId: string
   query?: string
   tagId?: string
-  checkIntervalSeconds: number
   threshold: number
   enabled: boolean
 }

@@ -31,7 +31,6 @@ public class AlertService(DashyDbContext db, ILogger<AlertService> logger)
             Name = request.Name,
             SourceId = source.Id,
             Query = await ResolveQueryAsync(request.Query, request.TagId, source, ct),
-            CheckIntervalSeconds = request.CheckIntervalSeconds,
             Threshold = request.Threshold,
             Enabled = request.Enabled,
             CreatedAt = DateTime.UtcNow,
@@ -67,7 +66,6 @@ public class AlertService(DashyDbContext db, ILogger<AlertService> logger)
 
         alert.Name = request.Name;
         alert.Query = await ResolveQueryAsync(request.Query, request.TagId, source, ct);
-        alert.CheckIntervalSeconds = request.CheckIntervalSeconds;
         alert.Threshold = request.Threshold;
         alert.Enabled = request.Enabled;
 
@@ -169,7 +167,6 @@ public record CreateAlertRequest(
     Guid SourceId,
     string? Query,
     Guid? TagId,
-    int CheckIntervalSeconds = 300,
     int Threshold = 1,
     bool Enabled = true);
 
@@ -178,6 +175,5 @@ public record UpdateAlertRequest(
     Guid SourceId,
     string? Query,
     Guid? TagId,
-    int CheckIntervalSeconds = 300,
     int Threshold = 1,
     bool Enabled = true);

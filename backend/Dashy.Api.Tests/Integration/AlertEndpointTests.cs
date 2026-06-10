@@ -46,7 +46,6 @@ public class AlertEndpointTests : IAsyncLifetime
             name,
             sourceId = _sourceId,
             query = "exceptions | where message contains \"boom\"",
-            checkIntervalSeconds = 300,
             threshold = 1,
             enabled = true,
         });
@@ -79,14 +78,14 @@ public class AlertEndpointTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task CreateAlert_ReturnsValidation_WhenIntervalBelowMinimum()
+    public async Task CreateAlert_ReturnsValidation_WhenThresholdBelowMinimum()
     {
         var response = await _client.PostAsJsonAsync("/api/v1/alerts", new
         {
-            name = "Too fast",
+            name = "Zero threshold",
             sourceId = _sourceId,
             query = "exceptions",
-            checkIntervalSeconds = 30,
+            threshold = 0,
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -165,7 +164,6 @@ public class AlertEndpointTests : IAsyncLifetime
             name = "Updated",
             sourceId = _sourceId,
             query = "traces | where message contains \"slow\"",
-            checkIntervalSeconds = 600,
             threshold = 5,
             enabled = false,
         });
@@ -173,7 +171,6 @@ public class AlertEndpointTests : IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var updated = await response.Content.ReadFromJsonAsync<AlertResponse>(Json);
         updated!.Name.Should().Be("Updated");
-        updated.CheckIntervalSeconds.Should().Be(600);
         updated.Threshold.Should().Be(5);
         updated.Enabled.Should().BeFalse();
     }

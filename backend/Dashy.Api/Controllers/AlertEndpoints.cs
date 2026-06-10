@@ -63,7 +63,7 @@ public static class AlertEndpoints
 
     private static async Task<IResult> Create(CreateAlertRequest request, AlertService svc, CancellationToken ct)
     {
-        var errors = Validate(request.Name, request.Query, request.TagId, request.CheckIntervalSeconds, request.Threshold);
+        var errors = Validate(request.Name, request.Query, request.TagId, request.Threshold);
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
@@ -90,7 +90,7 @@ public static class AlertEndpoints
 
     private static async Task<IResult> Update(Guid id, UpdateAlertRequest request, AlertService svc, CancellationToken ct)
     {
-        var errors = Validate(request.Name, request.Query, request.TagId, request.CheckIntervalSeconds, request.Threshold);
+        var errors = Validate(request.Name, request.Query, request.TagId, request.Threshold);
         if (errors.Count > 0)
         {
             return Results.ValidationProblem(errors);
@@ -140,7 +140,7 @@ public static class AlertEndpoints
     }
 
     private static Dictionary<string, string[]> Validate(
-        string? name, string? query, Guid? tagId, int checkIntervalSeconds, int threshold)
+        string? name, string? query, Guid? tagId, int threshold)
     {
         var errors = new Dictionary<string, string[]>();
 
@@ -152,11 +152,6 @@ public static class AlertEndpoints
         if (string.IsNullOrWhiteSpace(query) && tagId is null)
         {
             errors["query"] = ["Either query or tagId is required"];
-        }
-
-        if (checkIntervalSeconds < 60)
-        {
-            errors["checkIntervalSeconds"] = ["Check interval must be at least 60 seconds"];
         }
 
         if (threshold < 1)
@@ -173,7 +168,6 @@ public static class AlertEndpoints
         a.SourceId,
         a.Source?.Name ?? "",
         a.Query,
-        a.CheckIntervalSeconds,
         a.Threshold,
         a.Enabled,
         a.LastCheckedAt,
@@ -188,7 +182,6 @@ public record AlertResponse(
     Guid SourceId,
     string SourceName,
     string Query,
-    int CheckIntervalSeconds,
     int Threshold,
     bool Enabled,
     DateTime? LastCheckedAt,

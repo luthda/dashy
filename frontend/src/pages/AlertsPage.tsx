@@ -1,5 +1,5 @@
+import { AlertDialog } from "@/components/alerts/AlertDialog"
 import { AlertList } from "@/components/alerts/AlertList"
-import { AlertSlideover } from "@/components/alerts/AlertSlideover"
 import { useAlertsQuery } from "@/hooks/useAlerts"
 import type { Alert } from "@/lib/types"
 import { Loader2Icon, PlusIcon } from "lucide-react"
@@ -42,8 +42,8 @@ export function AlertsPage() {
         <AlertList alerts={alerts ?? []} onEdit={setEditing} />
       )}
 
-      {showCreate && <AlertSlideover alert={null} onClose={() => setShowCreate(false)} />}
-      {editing && <AlertSlideover alert={editing} onClose={() => setEditing(null)} />}
+      {showCreate && <AlertDialog alert={null} onClose={() => setShowCreate(false)} />}
+      {editing && <AlertDialog alert={editing} onClose={() => setEditing(null)} />}
     </div>
   )
 }

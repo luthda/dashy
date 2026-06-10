@@ -62,7 +62,10 @@ public class AlertCheckServiceTests : IDisposable
         _connection.Dispose();
     }
 
-    private Alert SeedAlert(AlertStatus status = AlertStatus.Ok, DateTime? resolvedAt = null)
+    private Alert SeedAlert(
+        AlertStatus status = AlertStatus.Ok,
+        DateTime? resolvedAt = null,
+        DateTime? lastCheckedAt = null)
     {
         var alert = new Alert
         {
@@ -71,11 +74,11 @@ public class AlertCheckServiceTests : IDisposable
             SourceId = _source.Id,
             Source = _source,
             Query = "exceptions",
-            CheckIntervalSeconds = 300,
             Threshold = 2,
             Enabled = true,
             Status = status,
             ResolvedAt = resolvedAt,
+            LastCheckedAt = lastCheckedAt,
             CreatedAt = DateTime.UtcNow,
         };
         _db.Alerts.Add(alert);
@@ -158,18 +161,34 @@ public class AlertCheckServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CheckAsync_QueriesWindowOfOneCheckInterval()
+    public async Task CheckAsync_QueriesWindowSinceLastCheck()
     {
-        var alert = SeedAlert();
+        var lastChecked = DateTime.UtcNow.AddMinutes(-3);
+        var alert = SeedAlert(lastCheckedAt: lastChecked);
         _adapter.CountResult = 0;
         var now = DateTime.UtcNow;
 
         await _sut.CheckAsync(alert, now, CancellationToken.None);
 
         _adapter.LastCountRequest.Should().NotBeNull();
-        _adapter.LastCountRequest!.From.Should().Be(now.AddSeconds(-alert.CheckIntervalSeconds));
+        _adapter.LastCountRequest!.From.Should().Be(lastChecked);
         _adapter.LastCountRequest.To.Should().Be(now);
         _adapter.LastCountRequest.BaseQuery.Should().Be("exceptions");
+    }
+
+    [Fact]
+    public async Task CheckAsync_FallsBackToOneTickWindow_OnFirstCheck()
+    {
+        var alert = SeedAlert(); // LastCheckedAt is null
+        _adapter.CountResult = 0;
+        var now = DateTime.UtcNow;
+
+        await _sut.CheckAsync(alert, now, CancellationToken.None);
+
+        _adapter.LastCountRequest.Should().NotBeNull();
+        _adapter.LastCountRequest!.From.Should().Be(
+            now.AddSeconds(-AlertPollingService.TickIntervalSeconds));
+        _adapter.LastCountRequest.To.Should().Be(now);
     }
 
     // ── Fakes ────────────────────────────────────────────────────────────────

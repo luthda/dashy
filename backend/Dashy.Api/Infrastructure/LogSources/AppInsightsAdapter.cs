@@ -146,8 +146,12 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
     /// aggregation. The window is recomputed fresh each poll, so logs older than
     /// one check interval are never re-evaluated.
     /// </summary>
+    // Filters on ingestion_time(), not timestamp: App Insights ingestion lags
+    // minutes behind the event time, so a timestamp window that has already
+    // moved past the event would silently miss it. The half-open interval
+    // (from, to] matches the tiling poll windows — no double counting.
     public static string BuildCountKql(string baseQuery, DateTime from, DateTime to) =>
-        $"{baseQuery}\n| where timestamp >= datetime({from:O}) and timestamp <= datetime({to:O})\n| count";
+        $"{baseQuery}\n| where ingestion_time() > datetime({from:O}) and ingestion_time() <= datetime({to:O})\n| count";
 
     public static string BuildKql(
         string? freeText, TimeRangeRequest? timeRange, TagFilters tags, int limit,
