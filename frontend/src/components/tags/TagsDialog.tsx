@@ -4,7 +4,7 @@ import { useCreateTag, useDeleteTag, useTagsQuery, useUpdateTag } from "@/hooks/
 import { LEVELS, EVENT_TYPES, type Tag } from "@/lib/types"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Loader2Icon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
@@ -47,9 +47,17 @@ export function TagsDialog({ onClose }: TagsDialogProps) {
     setEditing(null)
   }
 
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", handleKey)
+    return () => document.removeEventListener("keydown", handleKey)
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-card border-border mx-4 w-full max-w-md rounded-xl border p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-card border-border mx-4 w-full max-w-md rounded-xl border p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-[15px] font-semibold">Tags</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">

@@ -4,13 +4,14 @@ import { LogStream } from "@/components/logs/LogStream"
 import { Pagination } from "@/components/logs/Pagination"
 import { SearchBar } from "@/components/logs/SearchBar"
 import { TagChipRow } from "@/components/logs/TagChipRow"
+import { SavedSearchesDialog } from "@/components/searches/SavedSearchesDialog"
 import { SourceSetupDialog } from "@/components/sources/SourceSetupDialog"
 import { TagsDialog } from "@/components/tags/TagsDialog"
 import { useLogQuery } from "@/hooks/useLogQuery"
 import { useSourcesQuery } from "@/hooks/useSources"
 import { useTagsQuery } from "@/hooks/useTags"
 import { EVENT_TYPES, LEVELS, type Range } from "@/lib/types"
-import { TagIcon } from "lucide-react"
+import { BookmarkIcon, TagIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 const DEFAULT_RANGE: Range = "1h"
@@ -35,19 +36,32 @@ export function LogsPage() {
   const [page, setPage] = useState(0)
   const [showAddSource, setShowAddSource] = useState(false)
   const [showTagsDialog, setShowTagsDialog] = useState(false)
+  const [showSavedSearches, setShowSavedSearches] = useState(false)
   const { data, hasMore, isLoading, queryError, serverError, run } = useLogQuery()
 
   const runQuery = useCallback(
-    (p: number = page) => {
+    (p: number = page, q: string = query) => {
       if (!sourceId) return
       const evtFilter = activeEventTypes.size < EVENT_TYPES.length ? [...activeEventTypes] : undefined
       const tagIds = activeTagIds.size > 0 ? [...activeTagIds] : undefined
       run({
-        sourceId, query: query || undefined, eventTypes: evtFilter, tagIds,
+        sourceId, query: q || undefined, eventTypes: evtFilter, tagIds,
         timeRange: { type: "relative", value: range }, limit: PAGE, skip: p * PAGE,
       })
     },
-    [sourceId, query, range, activeEventTypes, activeTagIds, page, run],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `query` is intentionally captured as a default; callers like applySavedSearch pass `q` explicitly
+    [sourceId, range, activeEventTypes, activeTagIds, page, run],
+  )
+
+  // Load a saved search string into the bar and run it immediately. `query` state
+  // hasn't flushed yet this tick, so pass the new string to runQuery explicitly.
+  const applySavedSearch = useCallback(
+    (q: string) => {
+      setQuery(q)
+      setPage(0)
+      runQuery(0, q)
+    },
+    [runQuery],
   )
 
   useEffect(() => { if (sources?.length && !sourceId) setSourceId(sources[0].id) }, [sources, sourceId])
@@ -100,6 +114,7 @@ export function LogsPage() {
           <SearchBar
             query={query}
             onQueryChange={setQuery}
+            onSearch={() => { setPage(0); runQuery(0) }}
             range={range}
             onRangeChange={(r) => { setRange(r); setPage(0) }}
             live={live}
@@ -110,9 +125,16 @@ export function LogsPage() {
           />
         </div>
         <button
+          onClick={() => setShowSavedSearches(true)}
+          title="Saved searches"
+          className="text-muted-foreground hover:text-foreground hover:border-border flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
+        >
+          <BookmarkIcon size={16} />
+        </button>
+        <button
           onClick={() => setShowTagsDialog(true)}
           title="Manage tags"
-          className="text-muted-foreground hover:text-foreground flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
+          className="text-muted-foreground hover:text-foreground hover:border-border flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
         >
           <TagIcon size={16} />
         </button>
@@ -133,6 +155,14 @@ export function LogsPage() {
       )}
 
       {showTagsDialog && <TagsDialog onClose={() => setShowTagsDialog(false)} />}
+
+      {showSavedSearches && (
+        <SavedSearchesDialog
+          currentQuery={query}
+          onApply={applySavedSearch}
+          onClose={() => setShowSavedSearches(false)}
+        />
+      )}
 
       {sources.length > 1 && (
         <div className="flex items-center gap-2">

@@ -5,6 +5,7 @@ import { Loader2Icon, SearchIcon, XIcon } from "lucide-react"
 interface SearchBarProps {
   query: string
   onQueryChange: (query: string) => void
+  onSearch: () => void
   range: Range
   onRangeChange: (range: Range) => void
   live: boolean
@@ -17,6 +18,7 @@ interface SearchBarProps {
 export function SearchBar({
   query,
   onQueryChange,
+  onSearch,
   range,
   onRangeChange,
   live,
@@ -33,6 +35,7 @@ export function SearchBar({
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") onSearch() }}
             spellCheck={false}
             placeholder="Search messages, services, hosts…"
             className="bg-transparent text-foreground w-full border-none text-[13.5px] outline-none placeholder:text-muted-foreground/60"
