@@ -1,22 +1,20 @@
 # Background Services
 
-Reference for `IHostedService` / `BackgroundService` patterns, scheduled work, and the alert
-polling system.
+Reference for `BackgroundService` patterns, scheduled work, and the alert polling system.
 
 ---
 
 ## BackgroundService Base Pattern
 
-Use `BackgroundService` (which implements `IHostedService`) with `PeriodicTimer` for
-recurring work. Create a scope per iteration since `BackgroundService` is a singleton.
+Use `BackgroundService` with `PeriodicTimer` for recurring work. Create a scope per tick since
+`BackgroundService` is a singleton but `DbContext` and business services are scoped.
 
 ```csharp
 public class AlertPollingService(
     IServiceScopeFactory scopeFactory,
-    AlertSseService sseService,
     ILogger<AlertPollingService> logger) : BackgroundService
 {
-    private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(60);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -41,57 +39,89 @@ public class AlertPollingService(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<DashyDbContext>();
-        var queryService = scope.ServiceProvider.GetRequiredService<LogQueryService>();
+        var checker = scope.ServiceProvider.GetRequiredService<AlertCheckService>();
 
-        var dueAlerts = await db.Alerts
+        var now = DateTime.UtcNow;
+
+        // Load all enabled alerts, then filter due ones in memory.
+        // SQLite can't translate `AddSeconds(column)` in a WHERE clause.
+        var enabledAlerts = await db.Alerts
             .Include(a => a.Source)
             .Where(a => a.Enabled)
-            .Where(a => a.LastCheckedAt == null
-                || a.LastCheckedAt.Value.AddSeconds(a.CheckIntervalSeconds) <= DateTimeOffset.UtcNow)
             .ToListAsync(ct);
+
+        var dueAlerts = enabledAlerts
+            .Where(a => a.LastCheckedAt is null
+                || a.LastCheckedAt.Value.AddSeconds(a.CheckIntervalSeconds) <= now)
+            .ToList();
 
         foreach (var alert in dueAlerts)
         {
-            await CheckAlertAsync(alert, db, queryService, ct);
+            await checker.CheckAsync(alert, now, ct);
         }
     }
+}
+```
 
-    private async Task CheckAlertAsync(
-        Alert alert, DashyDbContext db, LogQueryService queryService, CancellationToken ct)
+---
+
+## AlertCheckService — Extracted for Testability
+
+Per-alert check logic lives in a **separate scoped service** (`AlertCheckService`) so it can
+be unit-tested with a real `DbContext` and fake infrastructure dependencies, without spinning
+up the full background service.
+
+```csharp
+public class AlertCheckService(
+    DashyDbContext db,
+    SourceService sourceService,
+    ILogSourceAdapterFactory adapterFactory,
+    IAlertBroadcaster broadcaster,
+    ILogger<AlertCheckService> logger)
+{
+    public async Task CheckAsync(Alert alert, DateTime now, CancellationToken ct)
     {
         try
         {
-            var resultCount = await queryService.CountAsync(alert.Source, alert.Query, ct);
+            var windowStart = now.AddSeconds(-alert.CheckIntervalSeconds);
+            var adapter = adapterFactory.GetAdapter(alert.Source.Type);
+            var configJson = sourceService.DecryptConfig(alert.Source);
+
+            var resultCount = await adapter.CountAsync(new AdapterCountRequest(
+                ConfigJson: configJson,
+                SourceName: alert.Source.Name,
+                BaseQuery: alert.Query,
+                From: windowStart,
+                To: now), ct);
 
             if (resultCount >= alert.Threshold)
             {
-                var firing = new AlertFiring
+                db.AlertFirings.Add(new AlertFiring
                 {
+                    Id = Guid.NewGuid(),
                     AlertId = alert.Id,
-                    FiredAt = DateTimeOffset.UtcNow,
-                    ResultCount = resultCount
-                };
-                db.AlertFirings.Add(firing);
+                    FiredAt = now,
+                    ResultCount = resultCount,
+                });
                 alert.Status = AlertStatus.Firing;
+                alert.ResolvedAt = null;
 
-                await sseService.BroadcastAsync(new AlertFiredEvent(alert.Id, alert.Name, resultCount));
-                logger.LogInformation("Alert fired: {AlertName} count={Count}", alert.Name, resultCount);
+                await broadcaster.BroadcastAsync(
+                    new AlertFiredEvent(alert.Id, alert.Name, resultCount, now), ct);
             }
             else
             {
                 alert.Status = AlertStatus.Ok;
             }
-
-            alert.LastCheckedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Alert check failed: {AlertName}", alert.Name);
             alert.Status = AlertStatus.Error;
-            alert.LastCheckedAt = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync(ct);
         }
+
+        alert.LastCheckedAt = now;
+        await db.SaveChangesAsync(ct);
     }
 }
 ```
@@ -102,90 +132,104 @@ public class AlertPollingService(
 
 ```csharp
 // Program.cs
+builder.Services.AddScoped<AlertCheckService>();
+builder.Services.AddSingleton<AlertSseService>();
+builder.Services.AddSingleton<IAlertBroadcaster>(sp => sp.GetRequiredService<AlertSseService>());
 builder.Services.AddHostedService<AlertPollingService>();
 ```
+
+`AlertSseService` is registered both as itself (for the SSE endpoint to call `AddClient`/
+`WritePingAsync`/`RemoveClient`) and as `IAlertBroadcaster` (for `AlertCheckService` to call
+`BroadcastAsync`). Both resolve to the same singleton.
 
 ---
 
 ## Key Rules
 
-1. **Always create a scope** — `BackgroundService` is a singleton, but `DbContext` and services
-   are scoped. Use `IServiceScopeFactory.CreateAsyncScope()` per iteration.
+1. **Always create a scope** — `BackgroundService` is a singleton; `DbContext` and services
+   are scoped. Use `IServiceScopeFactory.CreateAsyncScope()` per tick.
 
 2. **Catch per-iteration** — never let a single failed tick kill the service. Catch exceptions
-   inside the loop, log them, and continue.
+   inside the loop, log at `Error`, and continue.
 
-3. **CancellationToken** — respect `stoppingToken` everywhere. Use it in all async calls.
-   Let `OperationCanceledException` propagate to stop the service cleanly.
+3. **Catch per-item** — `AlertCheckService.CheckAsync` catches and logs at `Warning` per alert,
+   marks it `Error`, and continues. One broken alert must not block the rest.
 
-4. **Logging** — log start/stop at `Information`, each tick failure at `Error`, per-item
-   failures at `Warning`.
+4. **CancellationToken** — pass `stoppingToken` / `ct` everywhere. Let `OperationCanceledException`
+   propagate to stop cleanly.
 
-5. **Timer interval** — the `PeriodicTimer` tick defines the minimum resolution. Individual
-   alerts define their own `check_interval_seconds`; the polling loop skips alerts that aren't
-   due yet.
+5. **In-memory due-filter** — SQLite cannot translate `column.AddSeconds(intColumn)` in a WHERE
+   clause. Load all enabled alerts and filter due ones in application code.
+
+6. **Extract check logic** — keep `BackgroundService` focused on scheduling; put per-item logic
+   in a separate scoped service so it can be unit-tested directly.
 
 ---
 
 ## SSE Broadcasting
 
-`AlertSseService` is a singleton that manages active SSE connections and broadcasts events.
+`AlertSseService` is a singleton with a per-client `SemaphoreSlim` write lock so heartbeat
+pings and alert broadcasts never interleave on the same connection.
 
 ```csharp
-public class AlertSseService
+public class AlertSseService(ILogger<AlertSseService> logger) : IAlertBroadcaster
 {
-    private readonly ConcurrentDictionary<string, StreamWriter> _clients = new();
+    private readonly ConcurrentDictionary<string, SseClient> _clients = new();
 
-    public async Task StreamAsync(HttpResponse response, CancellationToken ct)
+    public string AddClient(HttpResponse response)
     {
-        var clientId = Guid.NewGuid().ToString();
-        var writer = new StreamWriter(response.Body) { AutoFlush = true };
-        _clients.TryAdd(clientId, writer);
+        var id = Guid.NewGuid().ToString();
+        _clients.TryAdd(id, new SseClient(response, new SemaphoreSlim(1, 1)));
+        return id;
+    }
 
+    public void RemoveClient(string id) => _clients.TryRemove(id, out _);
+
+    public async Task<bool> WritePingAsync(string id, CancellationToken ct)
+    {
+        if (!_clients.TryGetValue(id, out var client)) return false;
+        return await TryWriteAsync(id, client, ": ping\n\n", ct);
+    }
+
+    public async Task BroadcastAsync(AlertFiredEvent evt, CancellationToken ct)
+    {
+        var json = JsonSerializer.Serialize(evt, JsonSerializerOptions.Web);
+        var message = $"event: alert-fired\ndata: {json}\n\n";
+        foreach (var (id, client) in _clients)
+            await TryWriteAsync(id, client, message, ct);
+    }
+
+    private async Task<bool> TryWriteAsync(string id, SseClient client, string message, CancellationToken ct)
+    {
+        await client.WriteLock.WaitAsync(ct);
         try
         {
-            await Task.Delay(Timeout.Infinite, ct);
+            await client.Response.WriteAsync(message, ct);
+            await client.Response.Body.FlushAsync(ct);
+            return true;
         }
-        catch (OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Client disconnected
+            logger.LogDebug(ex, "SSE write failed for client {Id}, removing", id);
+            RemoveClient(id);
+            return false;
         }
         finally
         {
-            _clients.TryRemove(clientId, out _);
+            client.WriteLock.Release();
         }
     }
 
-    public async Task BroadcastAsync<T>(T data)
-    {
-        var json = JsonSerializer.Serialize(data);
-        var message = $"data: {json}\n\n";
-
-        foreach (var (id, writer) in _clients)
-        {
-            try
-            {
-                await writer.WriteAsync(message);
-            }
-            catch
-            {
-                _clients.TryRemove(id, out _);
-            }
-        }
-    }
+    private sealed record SseClient(HttpResponse Response, SemaphoreSlim WriteLock);
 }
-```
-
-Registration:
-
-```csharp
-builder.Services.AddSingleton<AlertSseService>();
 ```
 
 ---
 
 ## Testing Background Services
 
-See `testing.md` for integration testing patterns. For unit testing a background service,
-inject a mock `IServiceScopeFactory` or test the `PollAsync` / `CheckAlertAsync` logic
-directly by extracting it into a testable service class.
+Unit-test `AlertCheckService` directly with an in-memory SQLite `DashyDbContext` and fake
+infrastructure (fake adapter, fake broadcaster, passthrough encryption). See `testing.md`.
+
+Do not unit-test `AlertPollingService` itself — its only job is scoping and scheduling, which
+is better exercised by integration tests against the running app.

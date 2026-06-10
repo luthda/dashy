@@ -1,6 +1,6 @@
 # Data Fetching Patterns
 
-Reference for the API client, TanStack React Query hooks, mutations, and SSE.
+Reference for the API client, TanStack React Query hooks, and SSE.
 
 ---
 
@@ -11,200 +11,181 @@ Components and hooks never call `fetch` directly.
 
 ```typescript
 // lib/api.ts
-const BASE_URL = "/api/v1"
+const BASE = "/api/v1"
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { "Content-Type": "application/json", ...init?.headers },
+    ...init,
   })
 
-  if (!response.ok) {
-    const problem = await response.json().catch(() => null)
-    throw new ApiError(response.status, problem?.detail ?? response.statusText)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, body?.error ?? res.statusText, body)
   }
 
-  if (response.status === 204) return undefined as T
-  return response.json()
+  if (res.status === 204) return undefined as T
+  return res.json() as Promise<T>
 }
 
 export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
+  readonly status: number
+  readonly body?: unknown
+
+  constructor(status: number, message: string, body?: unknown) {
     super(message)
+    this.name   = "ApiError"
+    this.status = status
+    this.body   = body
   }
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(body) }),
-  put: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  get:    <T>(path: string)                => request<T>(path),
+  post:   <T>(path: string, body: unknown) => request<T>(path, { method: "POST",   body: JSON.stringify(body) }),
+  put:    <T>(path: string, body: unknown) => request<T>(path, { method: "PUT",    body: JSON.stringify(body) }),
+  delete: <T>(path: string)               => request<T>(path, { method: "DELETE" }),
 }
 ```
 
 ---
 
-## Query Key Factory
+## Hook File Structure
 
-Centralize all query keys in `hooks/queries/keys.ts` for consistent invalidation.
-
-```typescript
-// hooks/queries/keys.ts
-export const queryKeys = {
-  sources: {
-    all: ["sources"] as const,
-    detail: (id: string) => ["sources", id] as const,
-  },
-  tags: {
-    all: ["tags"] as const,
-  },
-  savedSearches: {
-    all: ["saved-searches"] as const,
-  },
-  alerts: {
-    all: ["alerts"] as const,
-    detail: (id: string) => ["alerts", id] as const,
-    firings: (alertId: string) => ["alerts", alertId, "firings"] as const,
-  },
-  logs: {
-    query: (params: LogQueryParams) => ["logs", "query", params] as const,
-  },
-}
-```
-
----
-
-## Query Hooks
-
-One file per domain in `hooks/queries/`. Each hook wraps `useQuery` with proper typing.
+One hook file per domain in `hooks/`. Each file exports **both** query and mutation hooks for
+that domain. Query keys are file-local constants — no centralized key factory.
 
 ```typescript
-// hooks/queries/useSourcesQuery.ts
-import { useQuery } from "@tanstack/react-query"
+// hooks/useSources.ts
 import { api } from "@/lib/api"
-import { queryKeys } from "./keys"
-import type { SourceResponse } from "@/types/api"
+import type { Source, SourceType } from "@/lib/types"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+
+const SOURCES_KEY = ["sources"] as const
 
 export function useSourcesQuery() {
   return useQuery({
-    queryKey: queryKeys.sources.all,
-    queryFn: () => api.get<SourceResponse[]>("/sources"),
+    queryKey: SOURCES_KEY,
+    queryFn: () => api.get<Source[]>("/sources"),
+  })
+}
+
+export function useCreateSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { name: string; type: SourceType; config: object }) =>
+      api.post<Source>("/sources", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: SOURCES_KEY }),
+  })
+}
+
+export function useUpdateSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name?: string; config?: object }) =>
+      api.put<Source>(`/sources/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: SOURCES_KEY }),
+  })
+}
+
+export function useDeleteSource() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/sources/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: SOURCES_KEY }),
   })
 }
 ```
 
 ```typescript
-// hooks/queries/useAlertsQuery.ts
-export function useAlertsQuery() {
-  return useQuery({
-    queryKey: queryKeys.alerts.all,
-    queryFn: () => api.get<AlertResponse[]>("/alerts"),
-  })
-}
+// hooks/useTags.ts — same pattern
+const TAGS_KEY = ["tags"] as const
 
-export function useAlertFiringsQuery(alertId: string) {
-  return useQuery({
-    queryKey: queryKeys.alerts.firings(alertId),
-    queryFn: () => api.get<AlertFiringResponse[]>(`/alerts/${alertId}/firings`),
-    enabled: !!alertId,
-  })
-}
+export function useTagsQuery() { ... }
+export function useCreateTag() { ... }
+export function useUpdateTag() { ... }
+export function useDeleteTag() { ... }
 ```
 
 Rules:
-- Always specify `queryKey` from the key factory.
-- Use `enabled` to conditionally skip queries (e.g. when an ID isn't selected yet).
-- Return the full `useQuery` result — let the component destructure `{ data, isLoading, error }`.
+- Query key is a file-local `as const` array at the top of the file.
+- Query and mutation hooks for the same domain live in the same file.
+- Always invalidate the relevant key(s) in `onSuccess`.
+- Return the full `useMutation` / `useQuery` result — let the component destructure.
+- Toast on success/failure in the component, not the hook — keeps hooks reusable.
 
 ---
 
 ## Log Query Hook
 
-The log query is a POST with a request body, but semantically it's a read. Use `useQuery` with
-`queryFn` that calls `api.post`.
+The log query is a **mutation**, not a query — it fires on user submit, not on mount. It
+returns a custom state object that separates query errors (400 — invalid KQL, shown inline)
+from server errors (5xx — shown as toast).
 
 ```typescript
-// hooks/queries/useLogQuery.ts
-import { useQuery } from "@tanstack/react-query"
-import { api } from "@/lib/api"
-import { queryKeys } from "./keys"
-import type { LogQueryParams, LogEntry } from "@/types/api"
+// hooks/useLogQuery.ts
+import { api, ApiError } from "@/lib/api"
+import type { LogEntry, LogQueryRequest } from "@/lib/types"
+import { useMutation } from "@tanstack/react-query"
+import { useState } from "react"
 
-export function useLogQuery(params: LogQueryParams | null) {
-  return useQuery({
-    queryKey: queryKeys.logs.query(params!),
-    queryFn: () => api.post<LogEntry[]>("/logs/query", params),
-    enabled: params !== null,
-  })
+export interface LogQueryState {
+  data: LogEntry[] | null
+  hasMore: boolean
+  isLoading: boolean
+  queryError: string | null    // 400 — shown inline under SearchBar
+  serverError: string | null   // 5xx — shown as toast
+  lastUpdatedAt: Date | null
 }
-```
 
-The `params` object includes `sourceId`, `query`, `tagIds`, `timeRange`, and `limit`. The hook
-is disabled until the user submits a search.
+export function useLogQuery() {
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
 
----
-
-## Mutation Hooks
-
-One file per mutation in `hooks/mutations/`. Each hook wraps `useMutation` with proper typing
-and query invalidation.
-
-```typescript
-// hooks/mutations/useCreateSource.ts
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { api } from "@/lib/api"
-import { queryKeys } from "@/hooks/queries/keys"
-import type { CreateSourceRequest, SourceResponse } from "@/types/api"
-
-export function useCreateSource() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (data: CreateSourceRequest) =>
-      api.post<SourceResponse>("/sources", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.sources.all })
+  const mutation = useMutation({
+    mutationFn: async (req: LogQueryRequest) => {
+      const raw = await api.post<LogEntry[] | { entries: LogEntry[]; hasMore: boolean }>("/logs/query", req)
+      return Array.isArray(raw) ? { entries: raw, hasMore: false } : raw
     },
+    onSuccess: () => setLastUpdatedAt(new Date()),
   })
+
+  const queryError =
+    mutation.error instanceof ApiError && mutation.error.status === 400
+      ? mutation.error.message : null
+
+  const serverError =
+    mutation.error instanceof ApiError && mutation.error.status !== 400
+      ? mutation.error.message
+      : mutation.error && !(mutation.error instanceof ApiError)
+        ? (mutation.error as Error).message : null
+
+  return {
+    data:          mutation.data?.entries ?? null,
+    hasMore:       mutation.data?.hasMore ?? false,
+    isLoading:     mutation.isPending,
+    queryError,
+    serverError,
+    lastUpdatedAt,
+    run:   mutation.mutate,
+    reset: mutation.reset,
+  }
 }
 ```
 
-```typescript
-// hooks/mutations/useDeleteAlert.ts
-export function useDeleteAlert() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (id: string) => api.delete(`/alerts/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.alerts.all })
-    },
-  })
-}
-```
-
-Rules:
-- Invalidate the relevant query key(s) in `onSuccess`.
-- Toast on success/failure in the component, not the hook — keeps hooks reusable.
-- Mutation hooks don't manage dialog state — the component does.
+Usage in components: call `run(params)` to fire the query, read `data` / `isLoading` /
+`queryError` / `serverError` from the returned state.
 
 ---
 
 ## Connection Test
 
-Testing a source connection is an action, not a query. Use `useMutation`.
+Testing a source connection is an action. Use `useMutation` (already in `useSources.ts`).
 
 ```typescript
-// hooks/mutations/useTestConnection.ts
+// hooks/useSources.ts
 export function useTestConnection() {
   return useMutation({
-    mutationFn: (sourceId: string) =>
-      api.post<TestConnectionResponse>(`/sources/${sourceId}/test`, {}),
+    mutationFn: (id: string) => api.post<ConnectionTestResult>(`/sources/${id}/test`, {}),
   })
 }
 ```
@@ -213,21 +194,21 @@ export function useTestConnection() {
 
 ## SSE — Alert Stream
 
-`hooks/useAlertStream.ts` opens an `EventSource` connection to `/api/v1/alerts/stream` and
-dispatches toast notifications when alerts fire.
+`hooks/useAlertStream.ts` opens an `EventSource` to `/api/v1/alerts/stream` and dispatches
+toast notifications when alerts fire. This hook is called once in `AppShell` so the connection
+lives for the app's lifetime.
+
+> **Status**: implementing in Phase 5.
 
 ```typescript
 // hooks/useAlertStream.ts
 import { useEffect, useRef } from "react"
 import { useToast } from "@/hooks/use-toast"
 import { useQueryClient } from "@tanstack/react-query"
-import { queryKeys } from "./queries/keys"
 
-type AlertFiredEvent = {
-  alertId: string
-  alertName: string
-  resultCount: number
-}
+const ALERTS_KEY = ["alerts"] as const
+
+type AlertFiredEvent = { alertId: string; alertName: string; resultCount: number }
 
 export function useAlertStream() {
   const { toast } = useToast()
@@ -237,12 +218,12 @@ export function useAlertStream() {
   useEffect(() => {
     const source = new EventSource("/api/v1/alerts/stream")
 
-    source.onmessage = (event) => {
+    source.addEventListener("alert-fired", (event) => {
       const data: AlertFiredEvent = JSON.parse(event.data)
 
       const now = Date.now()
       const lastFired = lastFiredRef.current.get(data.alertId) ?? 0
-      if (now - lastFired < 60_000) return
+      if (now - lastFired < 60_000) return  // debounce per alert
       lastFiredRef.current.set(data.alertId, now)
 
       toast({
@@ -251,31 +232,13 @@ export function useAlertStream() {
         duration: 8000,
       })
 
-      queryClient.invalidateQueries({ queryKey: queryKeys.alerts.all })
-    }
+      queryClient.invalidateQueries({ queryKey: ALERTS_KEY })
+    })
 
     return () => source.close()
   }, [toast, queryClient])
 }
 ```
-
-This hook is called once in `AppShell` so the SSE connection lives for the app's lifetime.
-The 60-second debounce per alert prevents toast spam from rapid firings.
-
----
-
-## Auto-Refresh
-
-Saved searches can have a `refreshIntervalSeconds`. Use React Query's `refetchInterval` option.
-
-```typescript
-const { data } = useLogQuery(params)
-// When a saved search is active with auto-refresh:
-// Pass refetchInterval to the query options via a wrapper or direct option
-```
-
-The `refetchInterval` is set dynamically based on the active saved search. When no saved search
-is active or refresh is manual, `refetchInterval` is `false`.
 
 ---
 
@@ -288,91 +251,56 @@ if (isLoading) return <LoadingSkeleton />
 if (error) return <ErrorBanner message={error.message} />
 ```
 
-The `ApiError` class carries the HTTP status code. Components can branch on status:
+The `ApiError` class carries `.status` and `.body`. Components can branch on status:
 
 ```typescript
 if (error instanceof ApiError && error.status === 502) {
-  return <ErrorBanner message="Log source is unreachable. Check your connection settings." />
+  return <ErrorBanner message="Log source is unreachable." />
 }
 ```
+
+For `useLogQuery`, branch on `queryError` (show inline) vs. `serverError` (show as toast).
 
 ---
 
 ## Types
 
-Shared API types live in `types/api.ts`.
+Shared API and domain types live in `lib/types.ts` (not `types/api.ts`).
 
 ```typescript
-// types/api.ts
-export type SourceResponse = {
-  id: string
-  name: string
-  type: "app_insights" | "loki"
-  createdAt: string
-}
+// lib/types.ts
+export const SourceType = {
+  AppInsights: "AppInsights",
+} as const
+export type SourceType = (typeof SourceType)[keyof typeof SourceType]
 
-export type LogEntry = {
+export interface Source { id: string; name: string; type: SourceType; createdAt: string }
+
+export interface LogEntry {
   timestamp: string
-  level: string
+  level: "error" | "warn" | "info" | "debug" | "trace"
   message: string
   source: string
-  eventType: string | null
+  eventType: string
   properties: Record<string, string>
 }
 
-export type LogQueryParams = {
+export interface LogQueryRequest {
   sourceId: string
-  query: string
-  tagIds: string[]
-  timeRange: TimeRange
-  limit: number
+  query?: string
+  tagIds?: string[]
+  eventTypes?: string[]
+  timeRange?: TimeRange
+  limit?: number
+  skip?: number
 }
 
-export type TimeRange =
-  | { type: "relative"; value: string }
-  | { type: "absolute"; from: string; to: string }
-
-export type AlertResponse = {
-  id: string
-  name: string
-  sourceId: string
-  query: string
-  checkIntervalSeconds: number
-  threshold: number
-  enabled: boolean
-  lastCheckedAt: string | null
-  status: "ok" | "firing" | "error"
-  createdAt: string
-}
-
-export type AlertFiringResponse = {
-  id: string
-  alertId: string
-  firedAt: string
-  resultCount: number
-}
-
-export type TagResponse = {
-  id: string
-  name: string
-  color: string
+export interface Tag {
+  id: string; name: string; color: string
   filters: { terms: string[]; levels: string[]; eventTypes: string[] }
   createdAt: string
 }
-
-export type SavedSearchResponse = {
-  id: string
-  name: string
-  sourceId: string
-  query: string
-  tagIds: string[]
-  timeRange: TimeRange
-  refreshIntervalSeconds: number | null
-  createdAt: string
-}
-
-export type TestConnectionResponse = {
-  ok: boolean
-  error?: string
-}
+// ... SavedSearch, TimeRange, ConnectionTestResult, etc.
 ```
+
+Use `interface` (not `type`) for object shapes. Import from `@/lib/types`.

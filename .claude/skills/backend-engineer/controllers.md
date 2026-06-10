@@ -6,48 +6,54 @@ Reference for minimal API endpoints, DTOs, validation, and error handling.
 
 ## Minimal APIs
 
-Endpoints are organised as static classes in `Endpoints/`, one per domain. Each class has a
-`MapEndpoints` extension method called from `Program.cs`.
+Endpoints are static classes in `Controllers/`, one per domain. The class extends
+`RouteGroupBuilder` — the group is created in `Program.cs` via `app.MapGroup(...)`.
 
 ```csharp
-// Endpoints/SourceEndpoints.cs
-public static class SourceEndpoints
+// Controllers/SourceEndpoints.cs
+public static class LogSourceEndpoints
 {
-    public static void MapSourceEndpoints(this WebApplication app)
+    public static RouteGroupBuilder MapLogSourceEndpoints(this RouteGroupBuilder group)
     {
-        var group = app.MapGroup("/api/v1/sources")
-            .WithTags("Sources");
-
-        group.MapGet("/", GetAll);
-        group.MapPost("/", Create);
+        group.MapGet("/",          GetAll);
+        group.MapPost("/",         Create);
         group.MapPut("/{id:guid}", Update);
         group.MapDelete("/{id:guid}", Delete);
-        group.MapPost("/{id:guid}/test", TestConnection);
+        group.MapPost("/{id:guid}/test", Test);
+
+        return group;
     }
 
-    private static async Task<Ok<List<SourceResponse>>> GetAll(
-        SourceService service, CancellationToken ct)
+    private static async Task<IResult> GetAll(SourceService svc, CancellationToken ct)
     {
-        var sources = await service.GetAllAsync(ct);
-        return TypedResults.Ok(sources.Select(s => s.ToResponse()).ToList());
+        var sources = await svc.GetAllAsync(ct);
+        return Results.Ok(sources.Select(ToResponse));
     }
 
-    private static async Task<Results<Created<SourceResponse>, ValidationProblem>> Create(
-        CreateSourceRequest request, SourceService service, CancellationToken ct)
+    private static async Task<IResult> Create(
+        CreateSourceRequest request, SourceService svc, CancellationToken ct)
     {
-        var source = await service.CreateAsync(request, ct);
-        return TypedResults.Created($"/api/v1/sources/{source.Id}", source.ToResponse());
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                { "name", ["Name is required"] }
+            });
+        }
+
+        var source = await svc.CreateAsync(request, ct);
+        return Results.Created($"/api/v1/sources/{source.Id}", ToResponse(source));
     }
 
     // ...
 }
 
 // Program.cs
-app.MapSourceEndpoints();
-app.MapTagEndpoints();
-app.MapSavedSearchEndpoints();
-app.MapAlertEndpoints();
-app.MapLogEndpoints();
+app.MapGroup("/api/v1/sources").MapLogSourceEndpoints();
+app.MapGroup("/api/v1/tags").MapTagEndpoints();
+app.MapGroup("/api/v1/saved-searches").MapSavedSearchEndpoints();
+app.MapGroup("/api/v1/alerts").MapAlertEndpoints();
+app.MapGroup("/api/v1/logs").MapLogEndpoints();
 ```
 
 ---
@@ -58,79 +64,69 @@ app.MapLogEndpoints();
 - Plural resource names: `/sources`, `/tags`, `/saved-searches`, `/alerts`
 - GUID route parameters: `{id:guid}`
 - Action routes as verbs: `/sources/{id}/test`, `/logs/query`
-- Group-level tags for OpenAPI: `.WithTags("Sources")`
 
 ---
 
 ## DTOs (Request / Response Records)
 
-DTOs live in `Models/`. Use records. Request records use `required` for mandatory fields.
-Response records mirror the API contract.
+Use records. **Co-location rule**: response DTOs are defined at the bottom of the endpoint file;
+request DTOs are defined at the bottom of the service file. No separate `Models/` directory.
 
 ```csharp
-// Models/Sources/CreateSourceRequest.cs
-public record CreateSourceRequest(
-    string Name,
-    string Type,
-    JsonElement Config);
-
-// Models/Sources/SourceResponse.cs
+// At the bottom of Controllers/SourceEndpoints.cs
 public record SourceResponse(
     Guid Id,
     string Name,
     string Type,
-    DateTimeOffset CreatedAt);
+    DateTime CreatedAt);
 
-// Models/Sources/TestConnectionResponse.cs
-public record TestConnectionResponse(
-    bool Ok,
-    string? Error = null);
+// At the bottom of Application/Services/SourceService.cs
+public record CreateSourceRequest(string Name, string Type, JsonElement Config);
+public record UpdateSourceRequest(string Name, JsonElement Config);
 ```
 
 Rules:
 - Request DTOs never contain the entity ID — it comes from the route.
 - Response DTOs never expose encrypted/sensitive fields (e.g. `EncryptedConfig`).
 - Use `JsonElement` for pass-through JSON (e.g. source config before encryption).
-- Mapping between entity and DTO uses extension methods (see below).
 
 ---
 
 ## Mapping (Entity ↔ DTO)
 
-Extension methods in a `Mapping` static class next to the DTOs, or directly on the endpoint file
-if trivial.
+Private static `ToResponse` method directly in the endpoint class. No AutoMapper.
 
 ```csharp
-public static class SourceMappings
-{
-    public static SourceResponse ToResponse(this Source source) => new(
-        Id: source.Id,
-        Name: source.Name,
-        Type: source.Type.ToString().ToLowerInvariant(),
-        CreatedAt: source.CreatedAt);
-}
+private static SourceResponse ToResponse(Source s) => new(
+    Id:        s.Id,
+    Name:      s.Name,
+    Type:      s.Type.ToString(),
+    CreatedAt: s.CreatedAt);
 ```
-
-No AutoMapper. Explicit mapping only.
 
 ---
 
 ## Validation
 
-Use `FluentValidation` or manual validation in the service layer.
-Return `ValidationProblem` for invalid input.
+Input validation happens in the endpoint before calling the service. Return
+`Results.ValidationProblem(errors)` with a `Dictionary<string, string[]>`.
 
 ```csharp
-// Simple manual validation in service
-public async Task<Source> CreateAsync(CreateSourceRequest request, CancellationToken ct)
+private static async Task<IResult> Create(CreateAlertRequest request, AlertService svc, CancellationToken ct)
 {
+    var errors = new Dictionary<string, string[]>();
+
     if (string.IsNullOrWhiteSpace(request.Name))
-        throw new ValidationException("Name is required");
+        errors["name"] = ["Name is required"];
 
-    if (!Enum.TryParse<SourceType>(request.Type, true, out var sourceType))
-        throw new ValidationException($"Invalid source type: {request.Type}");
+    if (request.CheckIntervalSeconds < 60)
+        errors["checkIntervalSeconds"] = ["Check interval must be at least 60 seconds"];
 
-    // ...
+    if (errors.Count > 0)
+        return Results.ValidationProblem(errors);
+
+    var alert = await svc.CreateAsync(request, ct);
+    return Results.Created($"/api/v1/alerts/{alert.Id}", ToResponse(alert));
 }
 ```
 
@@ -138,44 +134,40 @@ public async Task<Source> CreateAsync(CreateSourceRequest request, CancellationT
 
 ## Error Handling
 
-Custom exception types mapped to HTTP status codes via a global exception handler middleware.
+There is no global exception handler. Endpoints catch typed exceptions from the service and
+map them to `Results.*` responses directly.
 
 ```csharp
-// Infrastructure/Exceptions.cs
-public class NotFoundException(string message) : Exception(message);
-public class ValidationException(string message) : Exception(message);
-public class ExternalServiceException(string message, Exception? inner = null) : Exception(message, inner);
+// Application/Exceptions/Exceptions.cs
+public class SourceNotFoundException(Guid id) : Exception($"Source {id} was not found");
+public class TagNotFoundException(Guid id) : Exception($"Tag {id} was not found");
+public class LogSourceQueryException(int statusCode, string body, Exception? inner = null)
+    : Exception($"Log source query failed ({statusCode}): {body}", inner);
+public class UnsupportedAlertSourceException(string sourceType)
+    : Exception($"Alerts are not supported for source type '{sourceType}'");
+```
 
-// Infrastructure/ExceptionHandlerMiddleware.cs — or use IExceptionHandler (.NET 10)
-public class GlobalExceptionHandler : IExceptionHandler
+```csharp
+// In the endpoint — catch and map explicitly
+try
 {
-    public async ValueTask<bool> TryHandleAsync(
-        HttpContext context, Exception exception, CancellationToken ct)
-    {
-        var (statusCode, title) = exception switch
-        {
-            NotFoundException => (StatusCodes.Status404NotFound, "Not Found"),
-            ValidationException => (StatusCodes.Status400BadRequest, "Validation Error"),
-            ExternalServiceException => (StatusCodes.Status502BadGateway, "External Service Error"),
-            _ => (StatusCodes.Status500InternalServerError, "Internal Server Error")
-        };
-
-        context.Response.StatusCode = statusCode;
-        await context.Response.WriteAsJsonAsync(new ProblemDetails
-        {
-            Status = statusCode,
-            Title = title,
-            Detail = exception.Message
-        }, ct);
-        return true;
-    }
+    var alert = await svc.CreateAsync(request, ct);
+    return Results.Created($"/api/v1/alerts/{alert.Id}", ToResponse(alert));
+}
+catch (SourceNotFoundException ex)
+{
+    return Results.NotFound(new { error = ex.Message });
+}
+catch (UnsupportedAlertSourceException ex)
+{
+    return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
 }
 ```
 
 Rules:
-- Services throw typed exceptions. Endpoints don't catch — the global handler does.
-- Always return `ProblemDetails` for errors (RFC 9457).
-- Log at `Warning` for 4xx, `Error` for 5xx — the handler does this, not the caller.
+- Services throw typed exceptions — never `throw new Exception(...)`.
+- Exception types live in `Application/Exceptions/Exceptions.cs`.
+- The endpoint catches and converts — no uncaught exceptions bubble through.
 
 ---
 
@@ -185,16 +177,12 @@ One service class per domain. Injected via constructor. Services own the busines
 endpoints are thin routing + mapping.
 
 ```csharp
-public class SourceService(
-    DashyDbContext db,
-    IEncryptionService encryption,
-    ILogger<SourceService> logger)
+public class AlertService(DashyDbContext db, ILogger<AlertService> logger)
 {
-    public async Task<List<Source>> GetAllAsync(CancellationToken ct) { ... }
-    public async Task<Source> CreateAsync(CreateSourceRequest request, CancellationToken ct) { ... }
-    public async Task<Source> UpdateAsync(Guid id, UpdateSourceRequest request, CancellationToken ct) { ... }
-    public async Task DeleteAsync(Guid id, CancellationToken ct) { ... }
-    public async Task<TestConnectionResponse> TestConnectionAsync(Guid id, CancellationToken ct) { ... }
+    public async Task<List<Alert>> GetAllAsync(CancellationToken ct) { ... }
+    public async Task<Alert> CreateAsync(CreateAlertRequest request, CancellationToken ct) { ... }
+    public async Task<Alert?> UpdateAsync(Guid id, UpdateAlertRequest request, CancellationToken ct) { ... }
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken ct) { ... }
 }
 ```
 
@@ -211,21 +199,49 @@ builder.Services.AddScoped<LogQueryService>();
 
 ## SSE (Server-Sent Events)
 
-For real-time alert push. A single SSE endpoint that clients subscribe to.
+`AlertSseService` is a singleton holding active connections behind a per-client write lock.
+The endpoint registers itself as a client, runs a heartbeat, and cleans up on disconnect.
 
 ```csharp
-// Endpoints/AlertEndpoints.cs
-group.MapGet("/stream", async (AlertSseService sse, HttpContext context, CancellationToken ct) =>
-{
-    context.Response.Headers.ContentType = "text/event-stream";
-    context.Response.Headers.CacheControl = "no-cache";
+// Controllers/AlertEndpoints.cs
+group.MapGet("/stream", Stream);
 
-    await sse.StreamAsync(context.Response, ct);
-});
+private static async Task Stream(HttpContext context, AlertSseService sse)
+{
+    var response = context.Response;
+    response.Headers.ContentType = "text/event-stream";
+    response.Headers.CacheControl = "no-cache";
+    response.Headers["X-Accel-Buffering"] = "no";
+
+    var ct = context.RequestAborted;
+    await response.WriteAsync("retry: 3000\n\n", ct);
+    await response.Body.FlushAsync(ct);
+
+    var clientId = sse.AddClient(response);
+    try
+    {
+        using var heartbeat = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        while (await heartbeat.WaitForNextTickAsync(ct))
+        {
+            if (!await sse.WritePingAsync(clientId, ct))
+            {
+                break;
+            }
+        }
+    }
+    catch (OperationCanceledException)
+    {
+        // Client disconnected.
+    }
+    finally
+    {
+        sse.RemoveClient(clientId);
+    }
+}
 ```
 
-The `AlertSseService` is a singleton that holds active connections and broadcasts events
-when the background service detects a firing.
+The background polling service broadcasts to all clients via `IAlertBroadcaster` (which
+`AlertSseService` implements). See `background-services.md`.
 
 ---
 
@@ -236,9 +252,9 @@ when the background service detects a firing.
 | List | 200 | `T[]` |
 | Get by ID | 200 | `T` |
 | Create | 201 | `T` (with `Location` header) |
-| Update | 200 | `T` |
-| Delete | 204 | — |
+| Update | 200 | `T` (or 404 if missing) |
+| Delete | 204 | — (or 404 if missing) |
 | Action (test, query) | 200 | Result object |
-| Validation error | 400 | `ProblemDetails` |
-| Not found | 404 | `ProblemDetails` |
-| External service failure | 502 | `ProblemDetails` |
+| Validation error | 400 | `ValidationProblem` |
+| Not found | 404 | `{ error: "..." }` |
+| Unsupported operation | 422 | `ProblemDetails` |
