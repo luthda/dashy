@@ -1,5 +1,7 @@
+import { useAlertsQuery } from "@/hooks/useAlerts"
 import { cn } from "@/lib/utils"
 import {
+  BellIcon,
   ListIcon,
   SettingsIcon,
 } from "lucide-react"
@@ -7,6 +9,7 @@ import { NavLink } from "react-router-dom"
 
 const NAV = [
   { to: "/logs", label: "Logs", Icon: ListIcon },
+  { to: "/alerts", label: "Alerts", Icon: BellIcon },
 ]
 
 interface SidebarProps {
@@ -14,6 +17,9 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed }: SidebarProps) {
+  const { data: alerts } = useAlertsQuery()
+  const hasFiring = alerts?.some((a) => a.status === "Firing") ?? false
+
   return (
     <aside
       className={cn(
@@ -45,7 +51,13 @@ export function Sidebar({ collapsed }: SidebarProps) {
           >
             {({ isActive }) => (
               <>
-                <Icon size={16} strokeWidth={isActive ? 2.2 : 2} />
+                <span className="relative flex">
+                  <Icon size={16} strokeWidth={isActive ? 2.2 : 2} />
+                  {/* Orange dot on the bell while any alert is firing */}
+                  {to === "/alerts" && hasFiring && (
+                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--sev-warn)]" />
+                  )}
+                </span>
                 {label}
               </>
             )}

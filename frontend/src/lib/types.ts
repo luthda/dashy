@@ -58,6 +58,39 @@ export interface TagFilters {
   eventTypes: string[]
 }
 
+export type AlertStatus = "Ok" | "Firing" | "Error"
+
+export interface Alert {
+  id: string
+  name: string
+  sourceId: string
+  sourceName: string
+  query: string
+  checkIntervalSeconds: number
+  threshold: number
+  enabled: boolean
+  lastCheckedAt: string | null
+  status: AlertStatus
+  resolvedAt: string | null
+  createdAt: string
+}
+
+export interface AlertFiring {
+  id: string
+  firedAt: string
+  resultCount: number
+}
+
+export interface AlertUpsertRequest {
+  name: string
+  sourceId: string
+  query?: string
+  tagId?: string
+  checkIntervalSeconds: number
+  threshold: number
+  enabled: boolean
+}
+
 export interface SavedSearch {
   id: string
   name: string
