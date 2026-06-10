@@ -25,6 +25,9 @@ export function LogsPage() {
   const [selectedSourceId, setSelectedSourceId] = useState("")
   const sourceId = selectedSourceId || sources?.[0]?.id || ""
   const [query, setQuery] = useState("")
+  // The last query actually submitted (Enter / saved search). Live ticks and
+  // pagination re-run this, not the half-typed text in the search box.
+  const [submittedQuery, setSubmittedQuery] = useState("")
   const [range, setRange] = useState<Range>(DEFAULT_RANGE)
   const [live, setLive] = useState(true)
   const [activeLevels, setActiveLevels] = useState<Set<string>>(
@@ -42,7 +45,7 @@ export function LogsPage() {
   const { data, hasMore, isLoading, queryError, serverError, lastUpdatedAt, run } = useLogQuery()
 
   const runQuery = useCallback(
-    (p: number = page, q: string = query) => {
+    (p: number = page, q: string = submittedQuery) => {
       if (!sourceId) return
       const evtFilter = activeEventTypes.size < EVENT_TYPES.length ? [...activeEventTypes] : undefined
       const tagIds = activeTagIds.size > 0 ? [...activeTagIds] : undefined
@@ -51,7 +54,7 @@ export function LogsPage() {
         timeRange: { type: "relative", value: range }, limit: PAGE, skip: p * PAGE,
       })
     },
-    [sourceId, range, activeEventTypes, activeTagIds, page, query, run],
+    [sourceId, range, activeEventTypes, activeTagIds, page, submittedQuery, run],
   )
 
   // Load a saved search string into the bar and run it immediately. `query` state
@@ -59,14 +62,18 @@ export function LogsPage() {
   const applySavedSearch = useCallback(
     (q: string) => {
       setQuery(q)
+      setSubmittedQuery(q)
       setPage(0)
       runQuery(0, q)
     },
     [runQuery],
   )
 
-  // Ref-tracking: compares refs to detect changes and auto-requery
-  const prevSourceId = useRef(sourceId)
+  // Ref-tracking: compares refs to detect changes and auto-requery.
+  // prevSourceId starts at "" (not sourceId) so the first render with a real
+  // source always triggers the initial query — even when sources come from the
+  // TanStack Query cache and are available synchronously on mount.
+  const prevSourceId = useRef("")
   const prevRange = useRef(range)
   const prevTagIds = useRef(activeTagIds)
   useEffect(() => {
@@ -76,11 +83,18 @@ export function LogsPage() {
     }
   }, [sourceId, range, activeTagIds, runQuery])
 
+  // Latest runQuery in a ref so the polling interval isn't torn down and
+  // restarted every time runQuery's identity changes (e.g. on each keystroke).
+  const runQueryRef = useRef(runQuery)
+  useEffect(() => {
+    runQueryRef.current = runQuery
+  }, [runQuery])
+
   useEffect(() => {
     if (!live || !sourceId) return
-    const id = setInterval(() => runQuery(page), LIVE_MS)
+    const id = setInterval(() => runQueryRef.current(), LIVE_MS)
     return () => clearInterval(id)
-  }, [live, sourceId, runQuery, page])
+  }, [live, sourceId])
 
   function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {
     setter((prev) => {
@@ -114,7 +128,7 @@ export function LogsPage() {
           <SearchBar
             query={query}
             onQueryChange={setQuery}
-            onSearch={() => { setPage(0); runQuery(0, query) }}
+            onSearch={() => { setSubmittedQuery(query); setPage(0); runQuery(0, query) }}
             range={range}
             onRangeChange={(r) => { setRange(r); setPage(0) }}
             live={live}

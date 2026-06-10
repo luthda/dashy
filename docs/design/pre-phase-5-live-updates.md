@@ -23,7 +23,7 @@ The Logs page already has a Live/Paused toggle wired to a polling interval, but:
 
 | State | Visual | Behaviour |
 |-------|--------|-----------|
-| **Live** | Green chip, pulsing dot (`.live-dot`), label "Live" | Fetches logs every 60 s; interval is restarted on any state change |
+| **Live** | Green chip, pulsing dot (`.live-dot`), label "Live" | Fetches logs every 60 s; interval is restarted only when live state or source changes |
 | **Paused** | Red chip, static dot (`.paused-dot`), label "Paused" | No automatic fetching; manual refresh still works |
 
 ### Default state
@@ -138,7 +138,11 @@ const LIVE_MS = 60_000          // was 30_000
 const [live, setLive] = useState(true)  // was false
 ```
 
-The polling `useEffect` and its cleanup are **unchanged** — they already handle single-interval enforcement and unmount cleanup correctly.
+The polling `useEffect` keeps its single-interval enforcement and unmount cleanup, with three refinements from review:
+
+1. **Initial query on cached mount** — the auto-requery effect's `prevSourceId` ref starts at `""`, so the first render with a real source always fires the initial query, even when sources are served synchronously from the TanStack Query cache on remount.
+2. **Stable polling cadence** — the interval effect depends only on `live` and `sourceId`; the latest `runQuery` is read through a ref, so typing, paging, or filter changes no longer tear down and restart the 60-second timer.
+3. **Submitted query only** — live ticks, refresh, and pagination re-run `submittedQuery` (the text last submitted via Enter or a saved search), never the half-typed contents of the search box.
 
 ---
 
