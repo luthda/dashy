@@ -21,7 +21,9 @@ const PAGE = 500
 export function LogsPage() {
   const { data: sources } = useSourcesQuery()
   const { data: tags } = useTagsQuery()
-  const [sourceId, setSourceId] = useState("")
+  // The user's explicit selection; falls back to the first source once loaded.
+  const [selectedSourceId, setSelectedSourceId] = useState("")
+  const sourceId = selectedSourceId || sources?.[0]?.id || ""
   const [query, setQuery] = useState("")
   const [range, setRange] = useState<Range>(DEFAULT_RANGE)
   const [live, setLive] = useState(true)
@@ -63,9 +65,7 @@ export function LogsPage() {
     [runQuery],
   )
 
-  useEffect(() => { if (sources?.length && !sourceId) setSourceId(sources[0].id) }, [sources, sourceId])
-
-  // Ref-tracking: runs every render, compares refs to detect changes and auto-requery
+  // Ref-tracking: compares refs to detect changes and auto-requery
   const prevSourceId = useRef(sourceId)
   const prevRange = useRef(range)
   const prevTagIds = useRef(activeTagIds)
@@ -74,7 +74,7 @@ export function LogsPage() {
     if (prevSourceId.current !== sourceId || prevRange.current !== range || prevTagIds.current !== activeTagIds) {
       prevSourceId.current = sourceId; prevRange.current = range; prevTagIds.current = activeTagIds; setPage(0); runQuery(0)
     }
-  })
+  }, [sourceId, range, activeTagIds, runQuery])
 
   useEffect(() => {
     if (!live || !sourceId) return
@@ -85,7 +85,8 @@ export function LogsPage() {
   function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {
     setter((prev) => {
       const n = new Set(prev)
-      n.has(id) ? n.delete(id) : n.add(id)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
       return n
     })
   }
@@ -144,13 +145,7 @@ export function LogsPage() {
         <TagChipRow
           tags={tags ?? []}
           activeTagIds={activeTagIds}
-          onToggle={(id) => {
-            setActiveTagIds((prev) => {
-              const next = new Set(prev)
-              next.has(id) ? next.delete(id) : next.add(id)
-              return next
-            })
-          }}
+          onToggle={(id) => toggleSet(setActiveTagIds, id)}
         />
       )}
 
@@ -169,7 +164,7 @@ export function LogsPage() {
           <span className="text-muted-foreground text-[12px]">Source:</span>
           <select
             value={sourceId}
-            onChange={(e) => setSourceId(e.target.value)}
+            onChange={(e) => setSelectedSourceId(e.target.value)}
             className="border-border bg-background h-8 rounded-md border px-2 text-[12.5px] outline-none"
           >
             {sources.map((s) => (
