@@ -48,6 +48,11 @@ builder.Services.AddScoped<SourceService>();
 builder.Services.AddScoped<LogQueryService>();
 builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<SavedSearchService>();
+builder.Services.AddScoped<AlertService>();
+builder.Services.AddScoped<AlertCheckService>();
+builder.Services.AddSingleton<AlertSseService>();
+builder.Services.AddSingleton<IAlertBroadcaster>(sp => sp.GetRequiredService<AlertSseService>());
+builder.Services.AddHostedService<AlertPollingService>();
 
 // ── JSON / API ────────────────────────────────────────────────────────────────
 builder.Services.ConfigureHttpJsonOptions(opt =>
@@ -83,6 +88,7 @@ app.MapGroup("/api/v1/sources").MapLogSourceEndpoints();
 app.MapGroup("/api/v1/logs").MapLogEndpoints();
 app.MapGroup("/api/v1/tags").MapTagEndpoints();
 app.MapGroup("/api/v1/saved-searches").MapSavedSearchEndpoints();
+app.MapGroup("/api/v1/alerts").MapAlertEndpoints();
 
 app.Run();
 

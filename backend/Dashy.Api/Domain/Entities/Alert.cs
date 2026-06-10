@@ -15,6 +15,7 @@ public class Alert
 
     public DateTime? LastCheckedAt { get; set; }
     public AlertStatus Status { get; set; } = AlertStatus.Ok;
+    public DateTime? ResolvedAt { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

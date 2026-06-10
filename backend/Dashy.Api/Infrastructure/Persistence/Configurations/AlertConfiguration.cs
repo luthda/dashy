@@ -46,6 +46,8 @@ public class AlertConfiguration : IEntityTypeConfiguration<Alert>
             .HasConversion<string>()
             .HasDefaultValue(AlertStatus.Ok);
 
+        builder.Property(a => a.ResolvedAt).HasColumnName("resolved_at");
+
         builder.Property(a => a.CreatedAt)
             .HasColumnName("created_at")
             .HasDefaultValueSql("datetime('now')");
