@@ -13,6 +13,8 @@ interface SearchBarProps {
   onRefresh: () => void
   error?: string | null
   isLoading: boolean
+  /** When the last successful query completed — manual or live. */
+  lastUpdatedAt?: Date | null
 }
 
 export function SearchBar({
@@ -26,6 +28,7 @@ export function SearchBar({
   onRefresh,
   error,
   isLoading,
+  lastUpdatedAt,
 }: SearchBarProps) {
   return (
     <div className="flex flex-col gap-2">
@@ -92,6 +95,15 @@ export function SearchBar({
             <RefreshIcon size={16} />
           )}
         </button>
+
+        {lastUpdatedAt && (
+          <span
+            title="Time of the last log update — manual or live"
+            className="text-muted-foreground font-mono text-[11.5px] whitespace-nowrap"
+          >
+            Updated {formatUpdatedAt(lastUpdatedAt)}
+          </span>
+        )}
       </div>
 
       {error && (
@@ -99,6 +111,12 @@ export function SearchBar({
       )}
     </div>
   )
+}
+
+function formatUpdatedAt(d: Date) {
+  const date = d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "numeric" })
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+  return `${date} ${time}`
 }
 
 function RefreshIcon({ size }: { size: number }) {

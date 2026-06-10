@@ -37,7 +37,7 @@ export function LogsPage() {
   const [showAddSource, setShowAddSource] = useState(false)
   const [showTagsDialog, setShowTagsDialog] = useState(false)
   const [showSavedSearches, setShowSavedSearches] = useState(false)
-  const { data, hasMore, isLoading, queryError, serverError, run } = useLogQuery()
+  const { data, hasMore, isLoading, queryError, serverError, lastUpdatedAt, run } = useLogQuery()
 
   const runQuery = useCallback(
     (p: number = page, q: string = query) => {
@@ -121,6 +121,7 @@ export function LogsPage() {
             onRefresh={() => runQuery(page)}
             error={queryError ?? serverError}
             isLoading={isLoading}
+            lastUpdatedAt={lastUpdatedAt}
           />
         </div>
         <button

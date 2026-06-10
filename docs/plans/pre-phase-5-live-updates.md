@@ -70,6 +70,21 @@ are correct as-is.
 - [x] `/frontend-engineer` — Change `useState(false)` to `useState(true)` for the `live` state
   in `frontend/src/pages/LogsPage.tsx` so live updates are enabled on page load
 
+### Phase 4 — Last-update timestamp label
+
+_Depends on: nothing (independent of Phases 1–3)_
+
+Show the date and time of the last successful log update next to the Refresh button. The
+timestamp lives in `useLogQuery` so manual searches, manual refreshes, and live poll ticks all
+update it through the same code path.
+
+- [x] `/frontend-engineer` — Add `lastUpdatedAt: Date | null` state to
+  `frontend/src/hooks/useLogQuery.ts`, set in the mutation's `onSuccess`, returned from the hook
+- [x] `/frontend-engineer` — Add `lastUpdatedAt` prop to `SearchBar` and render a muted
+  monospace `Updated <date> <time>` label right of the Refresh button (hidden until first query)
+- [x] `/frontend-engineer` — Pass `lastUpdatedAt` from `useLogQuery` through `LogsPage` to
+  `SearchBar`
+
 ---
 
 ## Dependency map

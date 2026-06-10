@@ -43,6 +43,17 @@ Live is **enabled by default** when the Logs page mounts. This matches the monit
 
 The chip sits **immediately left of the Refresh button**, inside the SearchBar controls row. This is the current position — no layout change is needed.
 
+### Last-update timestamp label
+
+A small muted label right of the Refresh button shows **when the last successful log query completed** — date and time (e.g. `Updated 10.06.2026 14:32:05`).
+
+- Updates on **every** successful query: manual search (Enter / search), the Refresh button, and each live poll tick.
+- Hidden until the first query completes (no "never" placeholder).
+- Does **not** update on failed queries — it always reflects the last data actually shown.
+- Formatted with the browser locale (`toLocaleDateString` + `toLocaleTimeString`), monospace, `muted-foreground`.
+
+The timestamp is owned by `useLogQuery` (`lastUpdatedAt: Date | null`, set in the mutation's `onSuccess`) so every code path that fetches logs updates it for free — no per-call bookkeeping in `LogsPage`.
+
 ### Chip design
 
 Match the time-range picker: rendered inside the same `bg-muted` pill container with `rounded-lg p-[3px]`, single active chip using `bg-background shadow-sm rounded-md`. The chip is always "active" (it always shows the current state), so it always renders with the inset background.
@@ -62,8 +73,9 @@ This is a **frontend-only** change. No backend migration, no new API endpoint, n
 | File | Change |
 |------|--------|
 | `frontend/src/index.css` | Add `--sev-success` token to `:root` and `.dark`; add `@theme inline` mapping; add `.live-dot` and `.paused-dot` CSS classes with keyframe animation |
-| `frontend/src/components/logs/SearchBar.tsx` | Restyle the Live/Paused `<button>` to use the pill-chip design |
-| `frontend/src/pages/LogsPage.tsx` | Change `LIVE_MS` from `30_000` → `60_000`; change initial `live` state from `false` → `true` |
+| `frontend/src/components/logs/SearchBar.tsx` | Restyle the Live/Paused `<button>` to use the pill-chip design; render the `Updated <date> <time>` label from the new `lastUpdatedAt` prop |
+| `frontend/src/hooks/useLogQuery.ts` | Add `lastUpdatedAt: Date \| null` state, set in the mutation's `onSuccess`, returned from the hook |
+| `frontend/src/pages/LogsPage.tsx` | Change `LIVE_MS` from `30_000` → `60_000`; change initial `live` state from `false` → `true`; pass `lastUpdatedAt` through to `SearchBar` |
 
 ### CSS tokens
 
@@ -141,6 +153,12 @@ Mirrors the issue's acceptance criteria exactly:
 - [ ] When resumed, interval-based log refresh continues every 60 seconds
 - [ ] Manual refresh button still refreshes logs while live updates are active or paused
 - [ ] Polling interval is cleaned up when the component unmounts or live state changes
+
+Additional (timestamp label):
+
+- [ ] A label next to the Refresh button shows the date and time of the last successful update
+- [ ] The label updates after a manual search, a manual refresh, and each live poll tick
+- [ ] The label is hidden until the first query completes and does not change on failed queries
 
 ---
 
