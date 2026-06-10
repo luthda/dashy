@@ -59,6 +59,7 @@ The timestamp is owned by `useLogQuery` (`lastUpdatedAt: Date | null`, set in th
 Match the time-range picker: rendered inside the same `bg-muted` pill container with `rounded-lg p-[3px]`, single active chip using `bg-background shadow-sm rounded-md`. The chip is always "active" (it always shows the current state), so it always renders with the inset background.
 
 Color tokens:
+
 - Live: `text-[var(--sev-success)]`
 - Paused: `text-[var(--sev-error)]`
 
