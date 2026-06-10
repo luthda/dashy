@@ -20,6 +20,15 @@ export function useCreateSavedSearch() {
   })
 }
 
+export function useUpdateSavedSearch() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      api.put<SavedSearch>(`/saved-searches/${id}`, { name }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: SAVED_SEARCHES_KEY }),
+  })
+}
+
 export function useDeleteSavedSearch() {
   const qc = useQueryClient()
   return useMutation({

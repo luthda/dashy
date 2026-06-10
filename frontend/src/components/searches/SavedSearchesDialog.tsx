@@ -3,10 +3,11 @@ import {
   useCreateSavedSearch,
   useDeleteSavedSearch,
   useSavedSearchesQuery,
+  useUpdateSavedSearch,
 } from "@/hooks/useSavedSearches"
 import type { SavedSearch } from "@/lib/types"
-import { Loader2Icon, SearchIcon, Trash2Icon, XIcon } from "lucide-react"
-import { useEffect, useState } from "react"
+import { CheckIcon, Loader2Icon, PencilIcon, SearchIcon, Trash2Icon, XIcon } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 
 interface SavedSearchesDialogProps {
   /** The query string currently in the search bar — offered as the value to save. */
@@ -118,6 +119,25 @@ function SavedList({
   onApply: (query: string) => void
 }) {
   const deleteSearch = useDeleteSavedSearch()
+  const updateSearch = useUpdateSavedSearch()
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState("")
+  const editRef = useRef<HTMLInputElement>(null)
+
+  function startEdit(s: SavedSearch) {
+    setEditingId(s.id)
+    setEditName(s.name)
+    setConfirmDeleteId(null)
+    setTimeout(() => editRef.current?.focus(), 0)
+  }
+
+  async function submitEdit(id: string) {
+    const trimmed = editName.trim()
+    if (!trimmed) return
+    await updateSearch.mutateAsync({ id, name: trimmed })
+    setEditingId(null)
+  }
 
   if (searches.length === 0) {
     return (
@@ -135,27 +155,83 @@ function SavedList({
           key={s.id}
           className="border-border hover:bg-accent group flex items-center gap-2.5 rounded-lg border px-3 py-2"
         >
-          <button
-            type="button"
-            onClick={() => onApply(s.query)}
-            className="flex min-w-0 flex-1 flex-col items-start text-left"
-          >
-            <span className="text-[13px] font-medium">{s.name}</span>
-            <span className="text-muted-foreground truncate text-[11.5px]">
-              {s.query || "All logs (no filter)"}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => deleteSearch.mutate(s.id)}
-            disabled={deleteSearch.isPending}
-            className="text-muted-foreground shrink-0 hover:text-[var(--sev-error)]"
-            title="Delete saved search"
-          >
-            <Trash2Icon size={13} />
-          </button>
+          {editingId === s.id ? (
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <input
+                ref={editRef}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); submitEdit(s.id) }
+                  if (e.key === "Escape") setEditingId(null)
+                  e.stopPropagation()
+                }}
+                className="border-border bg-background min-w-0 flex-1 rounded-md border px-2 py-0.5 text-[13px] outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => submitEdit(s.id)}
+                disabled={!editName.trim() || updateSearch.isPending}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+              >
+                <CheckIcon size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingId(null)}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+              >
+                <XIcon size={13} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onApply(s.query)}
+              className="flex min-w-0 flex-1 flex-col items-start text-left"
+            >
+              <span className="text-[13px] font-medium">{s.name}</span>
+              <span className="text-muted-foreground truncate text-[11.5px]">
+                {s.query || "All logs (no filter)"}
+              </span>
+            </button>
+          )}
+          {editingId !== s.id && (
+            <>
+              <button
+                type="button"
+                onClick={() => startEdit(s)}
+                className="text-muted-foreground shrink-0 hover:text-foreground"
+                title="Rename"
+              >
+                <PencilIcon size={13} />
+              </button>
+              {confirmDeleteId === s.id ? (
+                <button
+                  type="button"
+                  onClick={() => { deleteSearch.mutate(s.id); setConfirmDeleteId(null) }}
+                  disabled={deleteSearch.isPending}
+                  className="shrink-0 text-[11.5px] font-medium text-[var(--sev-error)]"
+                >
+                  Confirm
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setConfirmDeleteId(s.id); setEditingId(null) }}
+                  className="text-muted-foreground shrink-0 hover:text-[var(--sev-error)]"
+                  title="Delete saved search"
+                >
+                  <Trash2Icon size={13} />
+                </button>
+              )}
+            </>
+          )}
         </div>
       ))}
+      {updateSearch.error && (
+        <p className="text-[12px] text-[var(--sev-error)]">{updateSearch.error.message}</p>
+      )}
     </div>
   )
 }

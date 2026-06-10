@@ -104,4 +104,60 @@ public class SavedSearchEndpointTests : IAsyncLifetime
         var names = searches!.Select(s => s.Name).ToList();
         names.IndexOf("Second").Should().BeLessThan(names.IndexOf("First"));
     }
+
+    [Fact]
+    public async Task UpdateSavedSearch_RenamesSuccessfully()
+    {
+        var create = await _client.PostAsJsonAsync("/api/v1/saved-searches", new { name = "Old name", query = "q" });
+        var created = await create.Content.ReadFromJsonAsync<SavedSearchResponse>();
+
+        var response = await _client.PutAsJsonAsync($"/api/v1/saved-searches/{created!.Id}", new { name = "New name" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<SavedSearchResponse>();
+        updated!.Name.Should().Be("New name");
+        updated.Query.Should().Be("q");
+    }
+
+    [Fact]
+    public async Task UpdateSavedSearch_ReturnsNotFound_WhenMissing()
+    {
+        var response = await _client.PutAsJsonAsync($"/api/v1/saved-searches/{Guid.NewGuid()}", new { name = "x" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task CreateSavedSearch_RejectsDuplicateName()
+    {
+        await _client.PostAsJsonAsync("/api/v1/saved-searches", new { name = "Unique", query = "a" });
+
+        var response = await _client.PostAsJsonAsync("/api/v1/saved-searches", new { name = "Unique", query = "b" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateSavedSearch_RejectsDuplicateName()
+    {
+        await _client.PostAsJsonAsync("/api/v1/saved-searches", new { name = "Taken", query = "a" });
+        var create = await _client.PostAsJsonAsync("/api/v1/saved-searches", new { name = "Other", query = "b" });
+        var created = await create.Content.ReadFromJsonAsync<SavedSearchResponse>();
+
+        var response = await _client.PutAsJsonAsync($"/api/v1/saved-searches/{created!.Id}", new { name = "Taken" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task UpdateSavedSearch_AllowsSameNameOnSelf()
+    {
+        var create = await _client.PostAsJsonAsync("/api/v1/saved-searches", new { name = "Keep", query = "a" });
+        var created = await create.Content.ReadFromJsonAsync<SavedSearchResponse>();
+
+        var response = await _client.PutAsJsonAsync($"/api/v1/saved-searches/{created!.Id}", new { name = "Keep" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
 }
+

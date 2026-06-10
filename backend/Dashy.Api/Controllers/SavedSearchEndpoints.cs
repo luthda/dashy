@@ -9,6 +9,7 @@ public static class SavedSearchEndpoints
     {
         group.MapGet("/", GetAll);
         group.MapPost("/", Create);
+        group.MapPut("/{id:guid}", Update);
         group.MapDelete("/{id:guid}", Delete);
 
         return group;
@@ -30,8 +31,38 @@ public static class SavedSearchEndpoints
             });
         }
 
+        if (await svc.NameExistsAsync(request.Name, null, ct))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                { "name", ["A saved search with this name already exists"] }
+            });
+        }
+
         var search = await svc.CreateAsync(request, ct);
         return Results.Created($"/api/v1/saved-searches/{search.Id}", ToResponse(search));
+    }
+
+    private static async Task<IResult> Update(Guid id, UpdateSavedSearchRequest request, SavedSearchService svc, CancellationToken ct)
+    {
+        if (request.Name is not null && string.IsNullOrWhiteSpace(request.Name))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                { "name", ["Name is required"] }
+            });
+        }
+
+        if (request.Name is not null && await svc.NameExistsAsync(request.Name, id, ct))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                { "name", ["A saved search with this name already exists"] }
+            });
+        }
+
+        var search = await svc.UpdateAsync(id, request, ct);
+        return search is null ? Results.NotFound() : Results.Ok(ToResponse(search));
     }
 
     private static async Task<IResult> Delete(Guid id, SavedSearchService svc, CancellationToken ct)

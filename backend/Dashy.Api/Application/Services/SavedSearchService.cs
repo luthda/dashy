@@ -11,6 +11,12 @@ public class SavedSearchService(DashyDbContext db, ILogger<SavedSearchService> l
         return await db.SavedSearches.OrderByDescending(s => s.CreatedAt).ToListAsync(ct);
     }
 
+    public async Task<bool> NameExistsAsync(string name, Guid? excludeId, CancellationToken ct)
+    {
+        return await db.SavedSearches.AnyAsync(
+            s => s.Name == name && (excludeId == null || s.Id != excludeId), ct);
+    }
+
     public async Task<SavedSearch> CreateAsync(CreateSavedSearchRequest request, CancellationToken ct)
     {
         logger.LogInformation("Creating saved search {Name}", request.Name);
@@ -24,6 +30,22 @@ public class SavedSearchService(DashyDbContext db, ILogger<SavedSearchService> l
         };
 
         db.SavedSearches.Add(search);
+        await db.SaveChangesAsync(ct);
+        return search;
+    }
+
+    public async Task<SavedSearch?> UpdateAsync(Guid id, UpdateSavedSearchRequest request, CancellationToken ct)
+    {
+        logger.LogInformation("Updating saved search {Id}", id);
+
+        var search = await db.SavedSearches.FindAsync([id], ct);
+        if (search is null)
+        {
+            return null;
+        }
+
+        search.Name = request.Name ?? search.Name;
+
         await db.SaveChangesAsync(ct);
         return search;
     }
@@ -45,5 +67,7 @@ public class SavedSearchService(DashyDbContext db, ILogger<SavedSearchService> l
 }
 
 public record CreateSavedSearchRequest(string Name, string? Query);
+
+public record UpdateSavedSearchRequest(string? Name);
 
 public record SavedSearchResponse(Guid Id, string Name, string Query, DateTime CreatedAt);
