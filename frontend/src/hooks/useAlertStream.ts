@@ -9,7 +9,7 @@ interface AlertFiredEvent {
   firedAt: string
 }
 
-const TOAST_DURATION_MS = 8_000
+const TOAST_DURATION_MS = 10_000
 // At most one toast per alert per minute, even if it fires on every poll tick.
 const TOAST_DEBOUNCE_MS = 60_000
 

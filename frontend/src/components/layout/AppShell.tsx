@@ -35,7 +35,14 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
-      <Toaster theme={theme} position="bottom-right" />
+      <Toaster
+        theme={theme}
+        position="top-center"
+        expand
+        toastOptions={{
+          style: { width: "440px", fontSize: "14px", padding: "16px" },
+        }}
+      />
     </div>
   )
 }

@@ -86,7 +86,12 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         request.Headers.Add("X-Api-Key", apiKey);
         request.Content = JsonContent.Create(new { query = kql, timespan });
 
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         using var response = await http.SendAsync(request, ct);
+        stopwatch.Stop();
+
+        logger.LogInformation("App Insights responded {StatusCode} in {ElapsedMs} ms",
+            (int)response.StatusCode, stopwatch.ElapsedMilliseconds);
 
         if (!response.IsSuccessStatusCode)
         {
