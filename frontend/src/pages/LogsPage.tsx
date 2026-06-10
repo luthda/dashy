@@ -15,16 +15,21 @@ import { BookmarkIcon, TagIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 const DEFAULT_RANGE: Range = "1h"
-const LIVE_MS = 30_000
+const LIVE_MS = 60_000
 const PAGE = 500
 
 export function LogsPage() {
   const { data: sources } = useSourcesQuery()
   const { data: tags } = useTagsQuery()
-  const [sourceId, setSourceId] = useState("")
+  // The user's explicit selection; falls back to the first source once loaded.
+  const [selectedSourceId, setSelectedSourceId] = useState("")
+  const sourceId = selectedSourceId || sources?.[0]?.id || ""
   const [query, setQuery] = useState("")
+  // The last query actually submitted (Enter / saved search). Live ticks and
+  // pagination re-run this, not the half-typed text in the search box.
+  const [submittedQuery, setSubmittedQuery] = useState("")
   const [range, setRange] = useState<Range>(DEFAULT_RANGE)
-  const [live, setLive] = useState(false)
+  const [live, setLive] = useState(true)
   const [activeLevels, setActiveLevels] = useState<Set<string>>(
     () => new Set(LEVELS.map((l) => l.id)),
   )
@@ -37,10 +42,10 @@ export function LogsPage() {
   const [showAddSource, setShowAddSource] = useState(false)
   const [showTagsDialog, setShowTagsDialog] = useState(false)
   const [showSavedSearches, setShowSavedSearches] = useState(false)
-  const { data, hasMore, isLoading, queryError, serverError, run } = useLogQuery()
+  const { data, hasMore, isLoading, queryError, serverError, lastUpdatedAt, run } = useLogQuery()
 
   const runQuery = useCallback(
-    (p: number = page, q: string = query) => {
+    (p: number = page, q: string = submittedQuery) => {
       if (!sourceId) return
       const evtFilter = activeEventTypes.size < EVENT_TYPES.length ? [...activeEventTypes] : undefined
       const tagIds = activeTagIds.size > 0 ? [...activeTagIds] : undefined
@@ -49,7 +54,7 @@ export function LogsPage() {
         timeRange: { type: "relative", value: range }, limit: PAGE, skip: p * PAGE,
       })
     },
-    [sourceId, range, activeEventTypes, activeTagIds, page, query, run],
+    [sourceId, range, activeEventTypes, activeTagIds, page, submittedQuery, run],
   )
 
   // Load a saved search string into the bar and run it immediately. `query` state
@@ -57,16 +62,18 @@ export function LogsPage() {
   const applySavedSearch = useCallback(
     (q: string) => {
       setQuery(q)
+      setSubmittedQuery(q)
       setPage(0)
       runQuery(0, q)
     },
     [runQuery],
   )
 
-  useEffect(() => { if (sources?.length && !sourceId) setSourceId(sources[0].id) }, [sources, sourceId])
-
-  // Ref-tracking: runs every render, compares refs to detect changes and auto-requery
-  const prevSourceId = useRef(sourceId)
+  // Ref-tracking: compares refs to detect changes and auto-requery.
+  // prevSourceId starts at "" (not sourceId) so the first render with a real
+  // source always triggers the initial query — even when sources come from the
+  // TanStack Query cache and are available synchronously on mount.
+  const prevSourceId = useRef("")
   const prevRange = useRef(range)
   const prevTagIds = useRef(activeTagIds)
   useEffect(() => {
@@ -74,18 +81,26 @@ export function LogsPage() {
     if (prevSourceId.current !== sourceId || prevRange.current !== range || prevTagIds.current !== activeTagIds) {
       prevSourceId.current = sourceId; prevRange.current = range; prevTagIds.current = activeTagIds; setPage(0); runQuery(0)
     }
-  })
+  }, [sourceId, range, activeTagIds, runQuery])
+
+  // Latest runQuery in a ref so the polling interval isn't torn down and
+  // restarted every time runQuery's identity changes (e.g. on each keystroke).
+  const runQueryRef = useRef(runQuery)
+  useEffect(() => {
+    runQueryRef.current = runQuery
+  }, [runQuery])
 
   useEffect(() => {
     if (!live || !sourceId) return
-    const id = setInterval(() => runQuery(page), LIVE_MS)
+    const id = setInterval(() => runQueryRef.current(), LIVE_MS)
     return () => clearInterval(id)
-  }, [live, sourceId, runQuery, page])
+  }, [live, sourceId])
 
   function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {
     setter((prev) => {
       const n = new Set(prev)
-      n.has(id) ? n.delete(id) : n.add(id)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
       return n
     })
   }
@@ -107,13 +122,13 @@ export function LogsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 p-[18px_22px]">
+    <div className="flex h-full min-h-0 flex-col gap-3 px-5.5 py-4.5">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <SearchBar
             query={query}
             onQueryChange={setQuery}
-            onSearch={() => { setPage(0); runQuery(0, query) }}
+            onSearch={() => { setSubmittedQuery(query); setPage(0); runQuery(0, query) }}
             range={range}
             onRangeChange={(r) => { setRange(r); setPage(0) }}
             live={live}
@@ -121,19 +136,20 @@ export function LogsPage() {
             onRefresh={() => runQuery(page)}
             error={queryError ?? serverError}
             isLoading={isLoading}
+            lastUpdatedAt={lastUpdatedAt}
           />
         </div>
         <button
           onClick={() => setShowSavedSearches(true)}
           title="Saved searches"
-          className="text-muted-foreground hover:text-foreground hover:border-border flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
+          className="text-muted-foreground hover:text-foreground hover:border-border flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-lg border border-transparent"
         >
           <BookmarkIcon size={16} />
         </button>
         <button
           onClick={() => setShowTagsDialog(true)}
           title="Manage tags"
-          className="text-muted-foreground hover:text-foreground hover:border-border flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
+          className="text-muted-foreground hover:text-foreground hover:border-border flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-lg border border-transparent"
         >
           <TagIcon size={16} />
         </button>
@@ -143,13 +159,7 @@ export function LogsPage() {
         <TagChipRow
           tags={tags ?? []}
           activeTagIds={activeTagIds}
-          onToggle={(id) => {
-            setActiveTagIds((prev) => {
-              const next = new Set(prev)
-              next.has(id) ? next.delete(id) : next.add(id)
-              return next
-            })
-          }}
+          onToggle={(id) => toggleSet(setActiveTagIds, id)}
         />
       )}
 
@@ -168,7 +178,7 @@ export function LogsPage() {
           <span className="text-muted-foreground text-[12px]">Source:</span>
           <select
             value={sourceId}
-            onChange={(e) => setSourceId(e.target.value)}
+            onChange={(e) => setSelectedSourceId(e.target.value)}
             className="border-border bg-background h-8 rounded-md border px-2 text-[12.5px] outline-none"
           >
             {sources.map((s) => (

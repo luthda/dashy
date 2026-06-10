@@ -5,7 +5,7 @@ import { LEVELS, EVENT_TYPES, type Tag } from "@/lib/types"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Loader2Icon, PencilIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { z } from "zod"
 
 const TAG_COLORS = [
@@ -153,9 +153,10 @@ function TagForm({ tag, onDone }: { tag: Tag | null; onDone: () => void }) {
   })
 
   const isSubmitting = createTag.isPending || updateTag.isPending
-  const watchedColor = form.watch("color")
-  const watchedLevels = form.watch("levels")
-  const watchedEventTypes = form.watch("eventTypes")
+  // useWatch instead of form.watch — the latter is incompatible with React Compiler memoization
+  const watchedColor = useWatch({ control: form.control, name: "color" })
+  const watchedLevels = useWatch({ control: form.control, name: "levels" })
+  const watchedEventTypes = useWatch({ control: form.control, name: "eventTypes" })
 
   async function onSubmit(data: TagFormData) {
     const filters = {

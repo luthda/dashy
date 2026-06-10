@@ -1,6 +1,7 @@
 import { api, ApiError } from "@/lib/api"
 import type { LogEntry, LogQueryRequest } from "@/lib/types"
 import { useMutation } from "@tanstack/react-query"
+import { useState } from "react"
 
 interface LogQueryResponse {
   entries: LogEntry[]
@@ -13,9 +14,13 @@ export interface LogQueryState {
   isLoading: boolean
   queryError: string | null    // 400 — invalid KQL, shown inline under SearchBar
   serverError: string | null   // 5xx — shown as toast
+  lastUpdatedAt: Date | null   // when the last successful query completed
 }
 
 export function useLogQuery() {
+  // Set on every successful query — manual search, refresh, or live poll alike.
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
+
   const mutation = useMutation({
     mutationFn: async (req: LogQueryRequest) => {
       // The API may return either LogEntry[] (legacy) or { entries, hasMore }
@@ -25,6 +30,7 @@ export function useLogQuery() {
       }
       return raw
     },
+    onSuccess: () => setLastUpdatedAt(new Date()),
   })
 
   const queryError =
@@ -45,6 +51,7 @@ export function useLogQuery() {
     isLoading: mutation.isPending,
     queryError,
     serverError,
+    lastUpdatedAt,
     run: mutation.mutate,
     reset: mutation.reset,
   }

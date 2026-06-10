@@ -13,6 +13,8 @@ interface SearchBarProps {
   onRefresh: () => void
   error?: string | null
   isLoading: boolean
+  /** When the last successful query completed — manual or live. */
+  lastUpdatedAt?: Date | null
 }
 
 export function SearchBar({
@@ -26,11 +28,12 @@ export function SearchBar({
   onRefresh,
   error,
   isLoading,
+  lastUpdatedAt,
 }: SearchBarProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2.5">
-        <label className="border-border bg-card flex min-w-60 flex-1 items-center gap-2.5 rounded-lg border px-3 h-[38px]">
+        <label className="border-border bg-card flex min-w-60 flex-1 items-center gap-2.5 rounded-lg border px-3 h-9.5">
           <SearchIcon size={16} className="text-muted-foreground shrink-0" />
           <input
             value={query}
@@ -50,7 +53,7 @@ export function SearchBar({
           )}
         </label>
 
-        <div className="bg-muted inline-flex gap-0.5 rounded-lg p-[3px]">
+        <div className="bg-muted inline-flex gap-0.5 rounded-lg p-0.75">
           {RANGES.map((r) => (
             <button
               key={r}
@@ -67,23 +70,24 @@ export function SearchBar({
           ))}
         </div>
 
-        <button
-          onClick={onLiveToggle}
-          className={cn(
-            "flex h-[38px] items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium",
-            live
-              ? "border-[color-mix(in_oklch,var(--sev-success)_35%,transparent)] text-[var(--sev-success)]"
-              : "border-border text-muted-foreground",
-          )}
-        >
-          {live ? <span className="live-dot" /> : null}
-          {live ? "Live" : "Paused"}
-        </button>
+        <div className="bg-muted inline-flex rounded-lg p-0.75">
+          <button
+            onClick={onLiveToggle}
+            title={live ? "Live updates on — click to pause" : "Live updates paused — click to resume"}
+            className={cn(
+              "bg-background flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium shadow-sm",
+              live ? "text-[var(--sev-success)]" : "text-[var(--sev-error)]",
+            )}
+          >
+            <span className={live ? "live-dot" : "paused-dot"} />
+            {live ? "Live" : "Paused"}
+          </button>
+        </div>
 
         <button
           onClick={onRefresh}
           disabled={isLoading}
-          className="text-muted-foreground hover:text-foreground flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-transparent"
+          className="text-muted-foreground hover:text-foreground flex h-9.5 w-9.5 items-center justify-center rounded-lg border border-transparent"
         >
           {isLoading ? (
             <Loader2Icon size={16} className="animate-spin" />
@@ -91,6 +95,15 @@ export function SearchBar({
             <RefreshIcon size={16} />
           )}
         </button>
+
+        {lastUpdatedAt && (
+          <span
+            title="Time of the last log update — manual or live"
+            className="text-muted-foreground font-mono text-[11.5px] whitespace-nowrap"
+          >
+            Updated {formatUpdatedAt(lastUpdatedAt)}
+          </span>
+        )}
       </div>
 
       {error && (
@@ -98,6 +111,12 @@ export function SearchBar({
       )}
     </div>
   )
+}
+
+function formatUpdatedAt(d: Date) {
+  const date = d.toLocaleDateString(undefined, { day: "2-digit", month: "2-digit", year: "numeric" })
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+  return `${date} ${time}`
 }
 
 function RefreshIcon({ size }: { size: number }) {

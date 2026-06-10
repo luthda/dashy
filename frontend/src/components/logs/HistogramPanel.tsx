@@ -60,7 +60,7 @@ export function HistogramPanel({
             </span>{" "}
             events shown · last {range}
           </span>
-          <div className="bg-muted inline-flex gap-0.5 rounded-md p-[2px]">
+          <div className="bg-muted inline-flex gap-0.5 rounded-md p-0.5">
             {(["level", "eventType"] as const).map((g) => (
               <button
                 key={g}
