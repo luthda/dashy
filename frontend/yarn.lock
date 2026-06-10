@@ -1783,6 +1783,7 @@ __metadata:
     react-dom: ^19.2.6
     react-hook-form: ^7.77.0
     react-router-dom: ^7.16.0
+    sonner: ^2.0.7
     tailwind-merge: ^3.6.0
     tailwindcss: ^4.3.0
     tw-animate-css: ^1.4.0
@@ -2885,6 +2886,16 @@ __metadata:
   version: 3.0.0
   resolution: "shebang-regex@npm:3.0.0"
   checksum: 1a2bcae50de99034fcd92ad4212d8e01eedf52c7ec7830eedcf886622804fe36884278f2be8be0ea5fde3fd1c23911643a4e0f726c8685b61871c8908af01222
+  languageName: node
+  linkType: hard
+
+"sonner@npm:^2.0.7":
+  version: 2.0.7
+  resolution: "sonner@npm:2.0.7"
+  peerDependencies:
+    react: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+    react-dom: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+  checksum: 17b521c2603662478cf86d21436dcfee7316785b4654456c5f37c1a15af35001953354653c5ff1239d91f04969835728daddbc61fa9a81a76ee075eb18073bae
   languageName: node
   linkType: hard
 

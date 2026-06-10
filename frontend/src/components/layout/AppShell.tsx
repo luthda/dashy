@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react"
 import { Outlet } from "react-router-dom"
+import { Toaster } from "sonner"
+import { useAlertStream } from "@/hooks/useAlertStream"
 import { Sidebar } from "./Sidebar"
 import { Topbar } from "./Topbar"
 
@@ -11,6 +13,9 @@ export function AppShell() {
   })
 
   const [collapsed, setCollapsed] = useState(false)
+
+  // Mounted once here so alert toasts appear on every page.
+  useAlertStream()
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark")
@@ -30,6 +35,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <Toaster theme={theme} position="bottom-right" />
     </div>
   )
 }
