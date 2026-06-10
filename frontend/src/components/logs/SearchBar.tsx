@@ -33,7 +33,7 @@ export function SearchBar({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2.5">
-        <label className="border-border bg-card flex min-w-60 flex-1 items-center gap-2.5 rounded-lg border px-3 h-[38px]">
+        <label className="border-border bg-card flex min-w-60 flex-1 items-center gap-2.5 rounded-lg border px-3 h-9.5">
           <SearchIcon size={16} className="text-muted-foreground shrink-0" />
           <input
             value={query}
@@ -53,7 +53,7 @@ export function SearchBar({
           )}
         </label>
 
-        <div className="bg-muted inline-flex gap-0.5 rounded-lg p-[3px]">
+        <div className="bg-muted inline-flex gap-0.5 rounded-lg p-0.75">
           {RANGES.map((r) => (
             <button
               key={r}
@@ -70,7 +70,7 @@ export function SearchBar({
           ))}
         </div>
 
-        <div className="bg-muted inline-flex rounded-lg p-[3px]">
+        <div className="bg-muted inline-flex rounded-lg p-0.75">
           <button
             onClick={onLiveToggle}
             title={live ? "Live updates on — click to pause" : "Live updates paused — click to resume"}
@@ -87,7 +87,7 @@ export function SearchBar({
         <button
           onClick={onRefresh}
           disabled={isLoading}
-          className="text-muted-foreground hover:text-foreground flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-transparent"
+          className="text-muted-foreground hover:text-foreground flex h-9.5 w-9.5 items-center justify-center rounded-lg border border-transparent"
         >
           {isLoading ? (
             <Loader2Icon size={16} className="animate-spin" />

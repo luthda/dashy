@@ -108,7 +108,7 @@ export function LogsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 p-[18px_22px]">
+    <div className="flex h-full min-h-0 flex-col gap-3 px-5.5 py-4.5">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <SearchBar
@@ -128,14 +128,14 @@ export function LogsPage() {
         <button
           onClick={() => setShowSavedSearches(true)}
           title="Saved searches"
-          className="text-muted-foreground hover:text-foreground hover:border-border flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
+          className="text-muted-foreground hover:text-foreground hover:border-border flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-lg border border-transparent"
         >
           <BookmarkIcon size={16} />
         </button>
         <button
           onClick={() => setShowTagsDialog(true)}
           title="Manage tags"
-          className="text-muted-foreground hover:text-foreground hover:border-border flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-transparent"
+          className="text-muted-foreground hover:text-foreground hover:border-border flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-lg border border-transparent"
         >
           <TagIcon size={16} />
         </button>

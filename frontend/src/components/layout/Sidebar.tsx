@@ -19,7 +19,7 @@ export function Sidebar({ collapsed }: SidebarProps) {
       className={cn(
         "flex flex-col h-full flex-shrink-0 transition-all duration-200 overflow-hidden",
         "bg-[var(--sidebar)] border-r border-[var(--sidebar-border)]",
-        collapsed ? "w-0" : "w-[210px]",
+        collapsed ? "w-0" : "w-52.5",
       )}
     >
       {/* Brand */}
