@@ -73,6 +73,8 @@ Invoke the relevant skill before implementing — each loads focused coding-stan
 
 | Skill                     | Invoke when                                                                 |
 | ------------------------- | --------------------------------------------------------------------------- |
+| `/task-analyst`           | Starting any bugfix or small scoped task — analyzes, plans, routes to skills |
+| `/systematic-debugging`   | Any bug or unexpected behavior with unknown root cause — before any fix     |
 | `/backend-engineer`       | Implementing backend features, endpoints, services, migrations, tests       |
 | `/frontend-engineer`      | Implementing frontend features, components, pages, hooks                    |
 | `/design-doc`             | Designing a new feature before building — produces problem statement + spec |
