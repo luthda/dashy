@@ -25,22 +25,12 @@ used only once.
 // lib/schemas/source.ts
 import { z } from "zod"
 
+// AppInsights is the only supported source type right now.
+// When Loki is added, extend this schema with a discriminated union.
 export const createSourceSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  type: z.enum(["app_insights", "loki"]),
-  config: z.discriminatedUnion("type", [
-    z.object({
-      type: z.literal("app_insights"),
-      appId: z.string().min(1, "App ID is required"),
-      apiKey: z.string().min(1, "API key is required"),
-    }),
-    z.object({
-      type: z.literal("loki"),
-      baseUrl: z.string().url("Must be a valid URL"),
-      orgId: z.string().optional(),
-      authToken: z.string().optional(),
-    }),
-  ]),
+  appId: z.string().min(1, "Application ID is required"),
+  apiKey: z.string().min(1, "API Key is required"),
 })
 
 export type CreateSourceFormData = z.infer<typeof createSourceSchema>
@@ -101,7 +91,7 @@ export type CreateSavedSearchFormData = z.infer<typeof createSavedSearchSchema>
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { createSourceSchema, type CreateSourceFormData } from "@/lib/schemas/source"
-import { useCreateSource } from "@/hooks/mutations/useCreateSource"
+import { useCreateSource } from "@/hooks/useSources"
 import { useToast } from "@/hooks/use-toast"
 
 type SourceSetupDialogProps = {
@@ -266,7 +256,7 @@ Show validation errors immediately below the field. Use the shadcn destructive t
 ## Rules
 
 1. **Every form uses zod + react-hook-form** — no uncontrolled forms, no manual validation.
-2. **Schemas in `lib/schemas/`** — unless used only in one component.
+2. **Schema co-location** — define the zod schema at the top of the component file. Move to `lib/schemas/` only if the same schema is needed in multiple files.
 3. **`z.coerce.number()`** for numeric fields from text inputs.
 4. **No `any`** in form types — always `z.infer<typeof schema>`.
 5. **Reset on close** — dialogs must reset form state when closed.

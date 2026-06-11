@@ -62,48 +62,39 @@ direct database calls, `any` type, `@ts-ignore` without explanation.
 src/
 ├── components/
 │   ├── ui/               # shadcn/ui primitives (auto-generated, do not edit)
-│   ├── logs/
-│   │   ├── LogsPage.tsx
+│   ├── logs/             # log search & display components
 │   │   ├── SearchBar.tsx
+│   │   ├── FilterChips.tsx
 │   │   ├── TagChipRow.tsx
-│   │   ├── LogTable.tsx
-│   │   └── LogLevelChart.tsx
+│   │   ├── LogStream.tsx      # live-streaming log table (with pause/resume)
+│   │   ├── HistogramPanel.tsx
+│   │   └── StackedHistogram.tsx
 │   ├── tags/
 │   │   └── TagsDialog.tsx
-│   ├── saved-searches/
-│   │   └── SavedSearchDrawer.tsx
-│   ├── alerts/
-│   │   ├── AlertsPage.tsx
-│   │   ├── AlertHistoryPanel.tsx
-│   │   └── AlertToast.tsx
+│   ├── searches/              # saved searches (not "saved-searches")
+│   │   └── SavedSearchesDialog.tsx
+│   ├── alerts/                # alert management — implementing in Phase 5
 │   ├── sources/
 │   │   └── SourceSetupDialog.tsx
 │   ├── layout/
-│   │   └── AppShell.tsx       # sidebar nav: Logs / Metrics / Traces / Alerts
+│   │   ├── AppShell.tsx       # wraps Sidebar + <Outlet/>
+│   │   ├── Sidebar.tsx
+│   │   └── Topbar.tsx
 │   └── shared/                # genuinely cross-cutting UI pieces
-├── hooks/
-│   ├── queries/
-│   │   ├── keys.ts            # centralized query key factory
-│   │   ├── useSourcesQuery.ts
-│   │   ├── useLogQuery.ts
-│   │   ├── useTagsQuery.ts
-│   │   ├── useSavedSearchesQuery.ts
-│   │   └── useAlertsQuery.ts
-│   ├── mutations/
-│   │   ├── useCreateSource.ts
-│   │   └── ...
-│   └── useAlertStream.ts      # SSE connection for real-time alert push
+│       └── Field.tsx          # form field wrapper with label + error
+├── hooks/                     # flat — one file per domain, queries + mutations together
+│   ├── useSources.ts          # useSourcesQuery, useCreateSource, useUpdateSource, …
+│   ├── useTags.ts             # useTagsQuery, useCreateTag, useUpdateTag, …
+│   ├── useSavedSearches.ts
+│   ├── useLogQuery.ts         # mutation-based log search with split error states
+│   └── useAlertStream.ts      # SSE connection — Phase 5
 ├── lib/
-│   ├── api.ts                 # typed fetch wrappers
-│   └── schemas/               # shared zod schemas
-├── pages/                     # thin orchestration components
-│   ├── LogsPage.tsx
-│   ├── AlertsPage.tsx
-│   ├── MetricsPage.tsx        # shell — "Coming soon"
-│   ├── TracesPage.tsx         # shell — "Coming soon"
-│   └── SettingsPage.tsx
-└── types/
-    └── api.ts                 # shared API response/request types
+│   ├── api.ts                 # typed fetch wrappers + ApiError class
+│   ├── types.ts               # all shared API types (not types/api.ts)
+│   └── utils.ts
+└── pages/                     # thin orchestration components
+    ├── LogsPage.tsx
+    └── SettingsSourcesPage.tsx
 ```
 
 Always place new files in the right domain folder. Never dump new components in `components/` root.
@@ -116,12 +107,10 @@ Single layout: `components/layout/AppShell.tsx`. Sidebar with nav items: Logs, M
 Alerts, Settings. Content area renders nested `<Outlet/>`.
 
 ```
-/              → redirect to /logs
-/logs          → LogsPage
-/metrics       → MetricsPage (shell)
-/traces        → TracesPage (shell)
-/alerts        → AlertsPage
-/settings      → SettingsPage (source management)
+/                      → redirect to /logs
+/logs                  → LogsPage
+/settings/sources      → SettingsSourcesPage
+/alerts                → AlertsPage (Phase 5 — implementing now)
 ```
 
 Do not create new layout files — use props on `AppShell` for variations.
@@ -161,7 +150,7 @@ non-React widgets, auto-refresh timers.
 
 1. **File per component**: each component in its own file? → read `components.md`
 2. **Folder placement**: right domain folder under `components/`?
-3. **Data fetching**: through a query/mutation hook? → read `data-fetching.md`
+3. **Data fetching**: through a hook in `hooks/`? (flat files, combined queries + mutations) → read `data-fetching.md`
 4. **State scope**: server state in React Query, local UI state in `useState`? → read `components.md`
 5. **Forms**: react-hook-form + zod? → read `forms.md`
 6. **Tables**: following loading/empty/error patterns? → read `data-tables.md`

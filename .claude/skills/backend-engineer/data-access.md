@@ -19,7 +19,11 @@ public class DashyDbContext(DbContextOptions<DashyDbContext> options) : DbContex
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(DashyDbContext).Assembly);
+        modelBuilder.ApplyConfiguration(new SourceConfiguration());
+        modelBuilder.ApplyConfiguration(new TagConfiguration());
+        modelBuilder.ApplyConfiguration(new SavedSearchConfiguration());
+        modelBuilder.ApplyConfiguration(new AlertConfiguration());
+        modelBuilder.ApplyConfiguration(new AlertFiringConfiguration());
     }
 }
 ```
@@ -28,7 +32,7 @@ Registration in `Program.cs`:
 
 ```csharp
 builder.Services.AddDbContext<DashyDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseSqlite(connectionString));
 ```
 
 ---
@@ -63,7 +67,7 @@ public enum SourceType
 
 ## Entity Configuration
 
-One `IEntityTypeConfiguration<T>` per entity in `Data/Configurations/`. This is where
+One `IEntityTypeConfiguration<T>` per entity in `Infrastructure/Persistence/Configurations/`. This is where
 table names, column names, constraints, defaults, and relationships live — not on the entity.
 
 ```csharp
@@ -74,16 +78,14 @@ public class SourceConfiguration : IEntityTypeConfiguration<Source>
         builder.ToTable("sources");
 
         builder.HasKey(s => s.Id);
-        builder.Property(s => s.Id)
-            .HasColumnName("id")
-            .HasDefaultValueSql("gen_random_uuid()");
+        builder.Property(s => s.Id).HasColumnName("id");
 
         builder.Property(s => s.Name).HasColumnName("name").IsRequired();
         builder.Property(s => s.Type).HasColumnName("type").HasConversion<string>().IsRequired();
         builder.Property(s => s.EncryptedConfig).HasColumnName("config").HasColumnType("text").IsRequired();
         builder.Property(s => s.CreatedAt)
             .HasColumnName("created_at")
-            .HasDefaultValueSql("now()");
+            .HasDefaultValueSql("datetime('now')");
     }
 }
 ```
@@ -92,37 +94,39 @@ Naming rules:
 - Table names: `snake_case`, plural (e.g. `sources`, `saved_searches`, `alert_firings`)
 - Column names: `snake_case` (e.g. `created_at`, `source_id`)
 - Enum storage: string conversion (`.HasConversion<string>()`)
-- JSONB columns: use `.HasColumnType("jsonb")` with owned types or JSON serialisation
+- IDs: `Guid` type, generated in application code (`Guid.NewGuid()`) — SQLite has no UUID function
+- Datetime default: `HasDefaultValueSql("datetime('now')")` — not `now()` (PostgreSQL syntax)
 
 ---
 
-## JSONB Columns
+## JSON Columns (SQLite TEXT)
 
-For complex structured data stored as JSONB (e.g. tag filters, time range):
+SQLite has no native JSON type. Complex structured data is stored as a plain `TEXT` column
+containing a JSON string. The entity property is `string`; serialisation is handled in the
+application layer.
 
 ```csharp
-// Entity
+// Entity — plain string property
 public class Tag
 {
     public Guid Id { get; set; }
     public required string Name { get; set; }
     public required string Color { get; set; }
-    public required TagFilters Filters { get; set; }
-    public DateTimeOffset CreatedAt { get; set; }
+    public required string Filters { get; set; }  // JSON string, e.g. {"terms":[],"levels":[]}
+    public DateTime CreatedAt { get; set; }
 }
 
-public class TagFilters
-{
-    public List<string> Terms { get; set; } = [];
-    public List<string> Levels { get; set; } = [];
-    public List<string> EventTypes { get; set; } = [];
-}
+// Configuration — plain column, no OwnsOne/ToJson
+builder.Property(t => t.Filters)
+    .HasColumnName("filters")
+    .IsRequired()
+    .HasDefaultValue("{}");
+```
 
-// Configuration
-builder.OwnsOne(t => t.Filters, fb =>
-{
-    fb.ToJson("filters");
-});
+Deserialise in the service layer when you need to work with the structured value:
+
+```csharp
+var filters = TagFilters.FromJson(tag.Filters) ?? TagFilters.Empty;
 ```
 
 ---
@@ -141,7 +145,7 @@ var sources = await db.Sources
 var alert = await db.Alerts
     .Include(a => a.Source)
     .FirstOrDefaultAsync(a => a.Id == alertId, ct)
-    ?? throw new NotFoundException($"Alert {alertId} not found");
+    ?? throw new AlertNotFoundException(alertId);
 
 // Filtered query
 var firings = await db.AlertFirings
@@ -174,7 +178,7 @@ await db.SaveChangesAsync(ct);
 
 // Update — load, mutate, save
 var alert = await db.Alerts.FindAsync([alertId], ct)
-    ?? throw new NotFoundException($"Alert {alertId} not found");
+    ?? throw new AlertNotFoundException(alertId);
 alert.Name = request.Name;
 alert.Query = request.Query;
 alert.CheckIntervalSeconds = request.CheckIntervalSeconds;
