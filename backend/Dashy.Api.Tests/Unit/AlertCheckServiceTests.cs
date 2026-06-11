@@ -191,6 +191,30 @@ public class AlertCheckServiceTests : IDisposable
         _adapter.LastCountRequest.To.Should().Be(now);
     }
 
+    [Fact]
+    public async Task CheckAsync_BroadcastsOnlyAfterStatusIsCommitted()
+    {
+        var alert = SeedAlert();
+        _adapter.CountResult = 5;
+
+        // Read through a SECOND context on the same connection: only committed
+        // data is visible. The SSE handler refetches /alerts the moment the
+        // event arrives, so the Firing status must already be durable.
+        AlertStatus? statusAtBroadcast = null;
+        _broadcaster.OnBroadcast = () =>
+        {
+            var options = new DbContextOptionsBuilder<DashyDbContext>()
+                .UseSqlite(_connection)
+                .Options;
+            using var verifyDb = new DashyDbContext(options);
+            statusAtBroadcast = verifyDb.Alerts.Single(a => a.Id == alert.Id).Status;
+        };
+
+        await _sut.CheckAsync(alert, DateTime.UtcNow, CancellationToken.None);
+
+        statusAtBroadcast.Should().Be(AlertStatus.Firing);
+    }
+
     // ── Fakes ────────────────────────────────────────────────────────────────
 
     private sealed class PassthroughEncryptionService : IEncryptionService
@@ -233,10 +257,12 @@ public class AlertCheckServiceTests : IDisposable
     private sealed class FakeBroadcaster : IAlertBroadcaster
     {
         public List<AlertFiredEvent> Events { get; } = [];
+        public Action? OnBroadcast { get; set; }
 
         public Task BroadcastAsync(AlertFiredEvent evt, CancellationToken ct)
         {
             Events.Add(evt);
+            OnBroadcast?.Invoke();
             return Task.CompletedTask;
         }
     }

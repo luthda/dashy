@@ -20,6 +20,8 @@ public class AlertCheckService(
 {
     public async Task CheckAsync(Alert alert, DateTime now, CancellationToken ct)
     {
+        AlertFiredEvent? fired = null;
+
         try
         {
             // Windows tile across polls: (LastCheckedAt, now], so each entry is
@@ -53,8 +55,7 @@ public class AlertCheckService(
                 alert.ResolvedAt = null;
 
                 logger.LogInformation("Alert fired: {AlertName} count={Count}", alert.Name, resultCount);
-                await broadcaster.BroadcastAsync(
-                    new AlertFiredEvent(alert.Id, alert.Name, resultCount, now), ct);
+                fired = new AlertFiredEvent(alert.Id, alert.Name, resultCount, now);
             }
             else
             {
@@ -71,5 +72,14 @@ public class AlertCheckService(
 
         alert.LastCheckedAt = now;
         await db.SaveChangesAsync(ct);
+
+        // Broadcast only AFTER the commit: the frontend reacts to the SSE event
+        // by refetching /alerts immediately, and that read must observe the new
+        // Firing status — broadcasting earlier races the refetch against the
+        // transaction and the bell dot is randomly missed.
+        if (fired is not null)
+        {
+            await broadcaster.BroadcastAsync(fired, ct);
+        }
     }
 }
