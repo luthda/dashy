@@ -1,58 +1,88 @@
 import { api, ApiError } from "@/lib/api"
-import type { LogEntry, LogQueryRequest } from "@/lib/types"
-import { useMutation } from "@tanstack/react-query"
-import { useState } from "react"
+import type { LogEntry, LogQueryRequest, Range } from "@/lib/types"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
+
+const LIVE_MS = 60_000
+const PAGE_SIZE = 500
 
 interface LogQueryResponse {
   entries: LogEntry[]
   hasMore: boolean
 }
 
-export interface LogQueryState {
-  data: LogEntry[] | null
-  hasMore: boolean
-  isLoading: boolean
-  queryError: string | null    // 400 — invalid KQL, shown inline under SearchBar
-  serverError: string | null   // 5xx — shown as toast
-  lastUpdatedAt: Date | null   // when the last successful query completed
+export interface LogQueryParams {
+  sourceId: string
+  /** The submitted search text — not the live input value. */
+  query: string
+  range: Range
+  page: number
+  /** Sorted for a stable query key. */
+  tagIds: string[]
+  /** Server-side event-type filter; undefined = all types. */
+  eventTypes?: string[]
+  /** Live mode polls every 60s while true. */
+  live: boolean
 }
 
-export function useLogQuery() {
-  // Set on every successful query — manual search, refresh, or live poll alike.
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
+/**
+ * Declarative log query: any param change refetches via the query key, the
+ * cache survives navigation, and live mode is just a refetch interval. No
+ * imperative run() — callers change state, the key reacts.
+ */
+export function useLogQuery(params: LogQueryParams) {
+  const { sourceId, query, range, page, tagIds, eventTypes, live } = params
 
-  const mutation = useMutation({
-    mutationFn: async (req: LogQueryRequest) => {
+  const result = useQuery({
+    queryKey: ["logs", sourceId, range, query, page, tagIds, eventTypes ?? null] as const,
+    queryFn: async () => {
+      const req: LogQueryRequest = {
+        sourceId,
+        query: query || undefined,
+        tagIds: tagIds.length > 0 ? tagIds : undefined,
+        eventTypes,
+        timeRange: { type: "relative", value: range },
+        limit: PAGE_SIZE,
+        skip: page * PAGE_SIZE,
+      }
       // The API may return either LogEntry[] (legacy) or { entries, hasMore }
       const raw = await api.post<LogEntry[] | LogQueryResponse>("/logs/query", req)
-      if (Array.isArray(raw)) {
-        return { entries: raw, hasMore: false }
-      }
-      return raw
+      return Array.isArray(raw) ? { entries: raw, hasMore: false } : raw
     },
-    onSuccess: () => setLastUpdatedAt(new Date()),
+    enabled: !!sourceId,
+    // Keep the previous rows visible while the next fetch runs — no skeleton
+    // flash when switching source, page, or filters.
+    placeholderData: keepPreviousData,
+    refetchInterval: live ? LIVE_MS : false,
+    // Paused means paused: no surprise fetches on tab focus.
+    refetchOnWindowFocus: false,
+    // 400 = invalid KQL; retrying cannot fix it.
+    retry: (failureCount, error) =>
+      !(error instanceof ApiError && error.status === 400) && failureCount < 1,
   })
 
   const queryError =
-    mutation.error instanceof ApiError && mutation.error.status === 400
-      ? mutation.error.message
+    result.error instanceof ApiError && result.error.status === 400
+      ? result.error.message
       : null
 
   const serverError =
-    mutation.error instanceof ApiError && mutation.error.status !== 400
-      ? mutation.error.message
-      : mutation.error && !(mutation.error instanceof ApiError)
-        ? (mutation.error as Error).message
+    result.error instanceof ApiError && result.error.status !== 400
+      ? result.error.message
+      : result.error && !(result.error instanceof ApiError)
+        ? result.error.message
         : null
 
   return {
-    data: mutation.data?.entries ?? null,
-    hasMore: mutation.data?.hasMore ?? false,
-    isLoading: mutation.isPending,
+    data: result.data?.entries ?? null,
+    hasMore: result.data?.hasMore ?? false,
+    /** First load with nothing cached for this key — show the skeleton. */
+    isLoading: result.isPending,
+    /** Any in-flight fetch — drives the refresh spinner. */
+    isFetching: result.isFetching,
     queryError,
     serverError,
-    lastUpdatedAt,
-    run: mutation.mutate,
-    reset: mutation.reset,
+    /** When the data on screen was last fetched; null until the first success. */
+    lastUpdatedAt: result.dataUpdatedAt ? new Date(result.dataUpdatedAt) : null,
+    refetch: result.refetch,
   }
 }
