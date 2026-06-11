@@ -300,6 +300,35 @@ public class AlertEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetFirings_SerializesFiredAtWithUtcDesignator()
+    {
+        var created = await CreateAlertAsync("UTC alert");
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DashyDbContext>();
+            db.AlertFirings.Add(new AlertFiring
+            {
+                Id = Guid.NewGuid(),
+                AlertId = created.Id,
+                FiredAt = DateTime.UtcNow,
+                ResultCount = 1,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var response = await _client.GetAsync($"/api/v1/alerts/{created.Id}/firings");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        // SQLite stores DateTime without an offset; without the Utc converter the value
+        // round-trips as Kind=Unspecified and serializes without "Z", which browsers
+        // then misinterpret as local time.
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var firedAt = doc.RootElement[0].GetProperty("firedAt").GetString();
+        firedAt.Should().EndWith("Z");
+    }
+
+    [Fact]
     public async Task Stream_SendsEventStreamPreamble()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));

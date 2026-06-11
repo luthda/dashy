@@ -20,4 +20,10 @@ public class DashyDbContext(DbContextOptions<DashyDbContext> options) : DbContex
         modelBuilder.ApplyConfiguration(new AlertConfiguration());
         modelBuilder.ApplyConfiguration(new AlertFiringConfiguration());
     }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // All DateTimes are stored as UTC; restamp Kind=Utc on read (see UtcDateTimeConverter).
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+    }
 }
