@@ -1,6 +1,7 @@
 using Dashy.Api.Application.Exceptions;
 using Dashy.Api.Application.Services;
 using Dashy.Api.Domain.Entities;
+using Dashy.Api.Infrastructure.Sse;
 
 namespace Dashy.Api.Controllers;
 

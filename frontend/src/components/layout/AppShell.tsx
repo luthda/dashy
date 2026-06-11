@@ -35,13 +35,14 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      {/* sonner sizes toasts via its --width CSS variable, so width must be a
+          style value; font and padding go through Tailwind classes. */}
       <Toaster
         theme={theme}
         position="top-center"
         expand
-        toastOptions={{
-          style: { width: "440px", fontSize: "14px", padding: "16px" },
-        }}
+        style={{ "--width": "440px" } as React.CSSProperties}
+        toastOptions={{ classNames: { toast: "p-4! text-sm!" } }}
       />
     </div>
   )

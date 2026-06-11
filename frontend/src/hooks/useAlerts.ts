@@ -2,7 +2,7 @@ import { api } from "@/lib/api"
 import type { Alert, AlertFiring, AlertUpsertRequest } from "@/lib/types"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-const ALERTS_KEY = ["alerts"] as const
+export const ALERTS_KEY = ["alerts"] as const
 
 export function useAlertsQuery() {
   return useQuery({

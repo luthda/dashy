@@ -2,13 +2,21 @@ import { useAlertFiringsQuery } from "@/hooks/useAlerts"
 import { Loader2Icon } from "lucide-react"
 
 export function AlertFiringHistory({ alertId }: { alertId: string }) {
-  const { data: firings, isLoading } = useAlertFiringsQuery(alertId)
+  const { data: firings, isLoading, error } = useAlertFiringsQuery(alertId)
 
   if (isLoading) {
     return (
       <div className="flex justify-center py-6">
         <Loader2Icon size={16} className="text-muted-foreground animate-spin" />
       </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <p className="py-4 text-center text-[12.5px] text-[var(--sev-error)]">
+        Failed to load firing history: {error.message}
+      </p>
     )
   }
 

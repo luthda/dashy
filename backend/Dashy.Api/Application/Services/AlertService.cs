@@ -1,18 +1,24 @@
+using Dashy.Api.Application.Abstractions;
 using Dashy.Api.Application.Exceptions;
 using Dashy.Api.Domain.Entities;
-using Dashy.Api.Infrastructure.LogSources;
 using Dashy.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Dashy.Api.Application.Services;
 
-public class AlertService(DashyDbContext db, ILogger<AlertService> logger)
+public class AlertService(
+    DashyDbContext db,
+    ILogSourceAdapterFactory adapterFactory,
+    ILogger<AlertService> logger)
 {
     public const int FiringHistoryLimit = 50;
 
     public async Task<List<Alert>> GetAllAsync(CancellationToken ct)
     {
+        logger.LogDebug("Listing alerts");
+
         return await db.Alerts
+            .AsNoTracking()
             .Include(a => a.Source)
             .OrderBy(a => a.CreatedAt)
             .ToListAsync(ct);
@@ -64,6 +70,14 @@ public class AlertService(DashyDbContext db, ILogger<AlertService> logger)
             alert.Source = source;
         }
 
+        if (request.Enabled && !alert.Enabled)
+        {
+            // Re-enable starts a fresh poll window — the check window is
+            // (LastCheckedAt, now], so a stale value from before the disabled
+            // period would let old events retrigger the alert immediately.
+            alert.LastCheckedAt = null;
+        }
+
         alert.Name = request.Name;
         alert.Query = await ResolveQueryAsync(request.Query, request.TagId, source, ct);
         alert.Threshold = request.Threshold;
@@ -109,6 +123,8 @@ public class AlertService(DashyDbContext db, ILogger<AlertService> logger)
 
     public async Task<List<AlertFiring>?> GetFiringsAsync(Guid id, CancellationToken ct)
     {
+        logger.LogDebug("Listing firings for alert {Id}", id);
+
         var exists = await db.Alerts.AnyAsync(a => a.Id == id, ct);
         if (!exists)
         {
@@ -138,25 +154,13 @@ public class AlertService(DashyDbContext db, ILogger<AlertService> logger)
         return BuildQueryFromTag(tag, source);
     }
 
-    private static string BuildQueryFromTag(Tag tag, Source source)
+    private string BuildQueryFromTag(Tag tag, Source source)
     {
-        if (source.Type != SourceType.AppInsights)
-        {
-            throw new UnsupportedAlertSourceException(source.Type.ToString());
-        }
-
         var filters = TagFilters.FromJson(tag.Filters) ?? TagFilters.Empty;
-        var kql = AppInsightsAdapter.BuildKql(freeText: null, timeRange: null, tags: filters, limit: 1000);
 
-        return TrimTrailingLimit(kql);
-    }
-
-    // The stored query is the base KQL without the global limit — the polling
-    // service appends its own time window and count clause at execution time.
-    private static string TrimTrailingLimit(string kql)
-    {
-        var idx = kql.LastIndexOf("\n| limit ", StringComparison.Ordinal);
-        return idx >= 0 ? kql[..idx] : kql;
+        // The adapter owns query syntax; one that cannot back alerts throws
+        // UnsupportedAlertSourceException (mapped to 422 by the endpoint).
+        return adapterFactory.GetAdapter(source.Type).BuildAlertQuery(filters);
     }
 }
 

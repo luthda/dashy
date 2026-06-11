@@ -29,9 +29,19 @@ function AlertRow({ alert, onEdit }: { alert: Alert; onEdit: () => void }) {
   const status = STATUS_STYLES[alert.status]
 
   return (
+    // role="button" + keyboard handling rather than a real <button>: the row
+    // contains the nested Resolved <button>, and buttons cannot nest.
     <div
+      role="button"
+      tabIndex={0}
       onClick={onEdit}
-      className="border-border bg-card hover:border-ring/40 flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onEdit()
+        }
+      }}
+      className="border-border bg-card hover:border-ring/40 focus-visible:ring-ring flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

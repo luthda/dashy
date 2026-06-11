@@ -46,7 +46,16 @@ public class AlertPollingService(
 
         foreach (var alert in enabledAlerts)
         {
-            await checker.CheckAsync(alert, now, ct);
+            try
+            {
+                await checker.CheckAsync(alert, now, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Isolate alerts from each other: a failed save for one must
+                // not skip the remaining checks this tick.
+                logger.LogError(ex, "Alert check crashed: {AlertName}", alert.Name);
+            }
         }
     }
 }

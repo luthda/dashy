@@ -16,6 +16,14 @@ public interface ILogSourceAdapter
     /// stored query stays reusable across polls.
     /// </summary>
     Task<int> CountAsync(AdapterCountRequest request, CancellationToken ct);
+
+    /// <summary>
+    /// Flattens tag filters into the source's base alert query — no time range,
+    /// no count clause (both are appended by the polling service at execution
+    /// time). Adapters for sources that cannot back alerts throw
+    /// UnsupportedAlertSourceException.
+    /// </summary>
+    string BuildAlertQuery(TagFilters filters);
 }
 
 public record AdapterCountRequest(

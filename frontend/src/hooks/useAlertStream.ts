@@ -1,3 +1,4 @@
+import { ALERTS_KEY } from "@/hooks/useAlerts"
 import { useQueryClient } from "@tanstack/react-query"
 import { useEffect, useRef } from "react"
 import { toast } from "sonner"
@@ -38,6 +39,9 @@ export function useAlertStream() {
       const last = lastToastAt.current.get(evt.alertId) ?? 0
       if (now - last >= TOAST_DEBOUNCE_MS) {
         lastToastAt.current.set(evt.alertId, now)
+        // Deliberately toasting from the hook: this is an app-level singleton
+        // subscription whose entire purpose is the notification — not a
+        // reusable mutation hook that different screens consume.
         toast.error(
           `Alert: ${evt.alertName} fired — ${evt.resultCount} result${evt.resultCount === 1 ? "" : "s"}`,
           { duration: TOAST_DURATION_MS },
@@ -46,7 +50,7 @@ export function useAlertStream() {
 
       // Refresh the list (and with it the sidebar bell dot) on every firing,
       // debounced or not.
-      qc.invalidateQueries({ queryKey: ["alerts"] })
+      qc.invalidateQueries({ queryKey: ALERTS_KEY })
     }
 
     source.addEventListener("alert-fired", onAlertFired)

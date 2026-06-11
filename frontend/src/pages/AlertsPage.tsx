@@ -6,7 +6,7 @@ import { Loader2Icon, PlusIcon } from "lucide-react"
 import { useState } from "react"
 
 export function AlertsPage() {
-  const { data: alerts, isLoading } = useAlertsQuery()
+  const { data: alerts, isLoading, error } = useAlertsQuery()
   const [showCreate, setShowCreate] = useState(false)
   const [editing, setEditing] = useState<Alert | null>(null)
 
@@ -36,7 +36,11 @@ export function AlertsPage() {
         </button>
       </div>
 
-      {alerts?.length === 0 ? (
+      {error ? (
+        <p className="py-8 text-center text-[12.5px] text-[var(--sev-error)]">
+          Failed to load alerts: {error.message}
+        </p>
+      ) : alerts?.length === 0 ? (
         <EmptyState onCreate={() => setShowCreate(true)} />
       ) : (
         <AlertList alerts={alerts ?? []} onEdit={setEditing} />

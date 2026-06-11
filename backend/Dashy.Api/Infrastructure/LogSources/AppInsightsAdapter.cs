@@ -151,6 +151,20 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
     /// aggregation. The window is recomputed fresh each poll, so logs older than
     /// one check interval are never re-evaluated.
     /// </summary>
+    public string BuildAlertQuery(TagFilters filters)
+    {
+        var kql = BuildKql(freeText: null, timeRange: null, tags: filters, limit: 1000);
+        return TrimTrailingLimit(kql);
+    }
+
+    // The stored alert query is the base KQL without the global limit — the
+    // polling service appends its own time window and count clause at execution time.
+    private static string TrimTrailingLimit(string kql)
+    {
+        var idx = kql.LastIndexOf("\n| limit ", StringComparison.Ordinal);
+        return idx >= 0 ? kql[..idx] : kql;
+    }
+
     // Filters on ingestion_time(), not timestamp: App Insights ingestion lags
     // minutes behind the event time, so a timestamp window that has already
     // moved past the event would silently miss it. The half-open interval

@@ -18,7 +18,12 @@ const alertSchema = z
     mode: z.enum(["query", "tag"]),
     query: z.string(),
     tagId: z.string(),
-    threshold: z.number().int().min(1, "Threshold must be at least 1"),
+    // valueAsNumber turns a cleared input into NaN — own the message instead
+    // of zod's default "expected number, received nan".
+    threshold: z
+      .number({ message: "Threshold is required" })
+      .int()
+      .min(1, "Threshold must be at least 1"),
     enabled: z.boolean(),
   })
   .superRefine((data, ctx) => {

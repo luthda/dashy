@@ -176,6 +176,35 @@ public class AlertEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task UpdateAlert_ResetsCheckWindow_WhenReEnabled()
+    {
+        var created = await CreateAlertAsync("Re-enable");
+
+        // Disable it with a stale LastCheckedAt, as if it sat disabled for a week.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DashyDbContext>();
+            var alert = await db.Alerts.FindAsync(created.Id);
+            alert!.Enabled = false;
+            alert.LastCheckedAt = DateTime.UtcNow.AddDays(-7);
+            await db.SaveChangesAsync();
+        }
+
+        var response = await _client.PutAsJsonAsync($"/api/v1/alerts/{created.Id}", new
+        {
+            name = "Re-enable",
+            sourceId = _sourceId,
+            query = "exceptions",
+            enabled = true,
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updated = await response.Content.ReadFromJsonAsync<AlertResponse>(Json);
+        // The week-old window must not be inherited — null falls back to one tick.
+        updated!.LastCheckedAt.Should().BeNull();
+    }
+
+    [Fact]
     public async Task UpdateAlert_ReturnsNotFound_WhenMissing()
     {
         var response = await _client.PutAsJsonAsync($"/api/v1/alerts/{Guid.NewGuid()}", new

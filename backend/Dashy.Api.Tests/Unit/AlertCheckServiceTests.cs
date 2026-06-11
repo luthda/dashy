@@ -245,6 +245,9 @@ public class AlertCheckServiceTests : IDisposable
         public Task<List<LogEntry>> QueryAsync(AdapterQueryRequest request, CancellationToken ct) =>
             throw new NotSupportedException();
 
+        public string BuildAlertQuery(TagFilters filters) =>
+            throw new NotSupportedException();
+
         public Task TestConnectionAsync(string configJson, string sourceName, CancellationToken ct) =>
             Task.CompletedTask;
     }

@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Dashy.Api.Application.Abstractions;
 
-namespace Dashy.Api.Application.Services;
+namespace Dashy.Api.Infrastructure.Sse;
 
 /// <summary>
 /// Singleton registry of connected SSE clients. The stream endpoint registers a
@@ -48,10 +48,9 @@ public class AlertSseService(ILogger<AlertSseService> logger) : IAlertBroadcaste
         var json = JsonSerializer.Serialize(evt, JsonSerializerOptions.Web);
         var message = $"event: alert-fired\ndata: {json}\n\n";
 
-        foreach (var (id, client) in _clients)
-        {
-            await TryWriteAsync(id, client, message, ct);
-        }
+        // In parallel: one stalled connection must not delay the other clients
+        // (or the polling tick that triggered the broadcast).
+        await Task.WhenAll(_clients.Select(kv => TryWriteAsync(kv.Key, kv.Value, message, ct)));
     }
 
     private async Task<bool> TryWriteAsync(string id, SseClient client, string message, CancellationToken ct)

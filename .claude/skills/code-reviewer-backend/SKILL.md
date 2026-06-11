@@ -104,7 +104,7 @@ The project has four layers enforced by folder conventions:
 - Table/column/constraint config belongs in `IEntityTypeConfiguration<T>` — **never** on the entity class as data annotations.
 - Table names: `snake_case` plural (e.g. `alert_firings`). Column names: `snake_case`.
 - Enums stored as strings via `.HasConversion<string>()`.
-- New entities must include `CreatedAt` (`DateTimeOffset`, `HasDefaultValueSql("now()")`).
+- New entities must include `CreatedAt` (`DateTime` in UTC — the repo-wide convention — with `HasDefaultValueSql("datetime('now')")` on SQLite).
 - Primary keys: `Guid`, value generated in application code (`Guid.NewGuid()`).
 - Omitting `CreatedAt` on a new entity or configuring columns on the entity class (not configuration) is a violation.
 
@@ -143,8 +143,8 @@ The project has four layers enforced by folder conventions:
 ### Testing
 
 - Non-trivial changes without updated or new tests → flag the gap.
-- **Real database** — integration tests use Testcontainers PostgreSQL. In-memory SQLite provider is not acceptable for integration tests (doesn't match PostgreSQL behaviour for JSONB, UUID functions, etc.).
-- **No mocking `DashyDbContext`** — test against a real database via `DashyWebApplicationFactory` or a direct `DbContext` backed by Testcontainers.
+- **Real database** — the production database *is* SQLite, so tests run against real SQLite (`DataSource=:memory:` on an open shared connection, or `DashyWebApplicationFactory`). The EF InMemory provider is not acceptable — it skips relational behaviour (constraints, transactions, SQL translation).
+- **No mocking `DashyDbContext`** — test against a real SQLite database via `DashyWebApplicationFactory` or a direct `DbContext` on a `:memory:` connection.
 - Test names follow `MethodName_ExpectedResult_WhenCondition`:
   - `CreateSource_ReturnsCreated`
   - `DeleteSource_ReturnsNotFound_WhenMissing`

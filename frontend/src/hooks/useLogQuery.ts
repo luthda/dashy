@@ -2,6 +2,7 @@ import { api, ApiError } from "@/lib/api"
 import type { LogEntry, LogQueryRequest, Range } from "@/lib/types"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 
+const LOGS_KEY = ["logs"] as const
 const LIVE_MS = 60_000
 const PAGE_SIZE = 500
 
@@ -33,7 +34,7 @@ export function useLogQuery(params: LogQueryParams) {
   const { sourceId, query, range, page, tagIds, eventTypes, live } = params
 
   const result = useQuery({
-    queryKey: ["logs", sourceId, range, query, page, tagIds, eventTypes ?? null] as const,
+    queryKey: [...LOGS_KEY, sourceId, range, query, page, tagIds, eventTypes ?? null] as const,
     queryFn: async () => {
       const req: LogQueryRequest = {
         sourceId,

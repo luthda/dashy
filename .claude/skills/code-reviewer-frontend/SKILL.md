@@ -86,11 +86,16 @@ should be flagged — variations belong in props, not new files.
 **Use `useQuery` for data that should be cached and refetched automatically** (sources, tags,
 alerts). Use `useMutation` for actions the user explicitly triggers (creates, updates, deletes).
 
-**Log queries are mutations, not queries** (`hooks/useLogQuery.ts`). They fire on user submit,
-not on mount. The hook returns `{ run, reset, data, hasMore, isLoading, queryError, serverError }`.
-`queryError` (HTTP 400 — bad KQL) is shown inline under the search bar; `serverError` (5xx)
-is shown as a toast. If someone writes the log query as `useQuery`, flag it — the page would
-make a network request on every render and wouldn't have the split error-state semantics.
+**Log queries are a `useQuery` keyed on the search parameters** (`hooks/useLogQuery.ts`):
+`[...LOGS_KEY, sourceId, range, submittedQuery, page, tagIds, eventTypes]`. The key only
+changes on explicit user actions (submit, page, source/range/filter change), so fetches are
+user-driven — and the cache survives navigation, which a mutation-based version cannot do
+(its result dies with the unmounted observer; this caused a real empty-page bug). Live mode
+is `refetchInterval`; `refetchOnWindowFocus` stays disabled so Paused means paused. The hook
+returns `{ data, hasMore, isLoading, isFetching, queryError, serverError, lastUpdatedAt,
+refetch }` — `queryError` (HTTP 400 — bad KQL, never retried) is shown inline under the
+search bar; `serverError` (5xx) is surfaced separately. Flag any attempt to convert it back
+to `useMutation`, and flag key params that bypass the query key (cache poisoning).
 
 **Mutations must invalidate affected query keys in `onSuccess`** — otherwise the UI shows
 stale data until the user refreshes. The one acceptable exception is when the mutation result
@@ -196,10 +201,14 @@ timers). Before adding one, consider:
 
 ### Toasts
 
-`useToast` from `@/hooks/use-toast` only. No `sonner` (not in the stack).
+**`sonner` is the toast library** — `toast(...)` / `toast.error(...)` from `"sonner"`, with the
+single `<Toaster>` mounted in `AppShell`. There is no shadcn `use-toast` hook in this repo; flag
+any attempt to introduce a second toast mechanism.
 
-Error toasts should use `variant: "destructive"` with both `title` and `description`.
-Success toasts can be just `title`.
+Error toasts use `toast.error(...)`; give recurring event toasts an explicit `duration` and a
+per-key debounce when they can fire repeatedly (see `useAlertStream`). Toasts belong in
+components — the one exception is an app-level subscription hook whose entire purpose is the
+notification (e.g. `useAlertStream`), which must say so in a comment.
 
 ---
 

@@ -4,6 +4,7 @@ using Dashy.Api.Controllers;
 using Dashy.Api.Infrastructure.Encryption;
 using Dashy.Api.Infrastructure.LogSources;
 using Dashy.Api.Infrastructure.Persistence;
+using Dashy.Api.Infrastructure.Sse;
 using Dashy.Api.Options;
 using Microsoft.EntityFrameworkCore;
 
