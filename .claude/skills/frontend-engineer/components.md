@@ -122,8 +122,8 @@ Alert bell icon with badge count lives in the sidebar header — count comes fro
 
 ### Server state — TanStack React Query
 
-All data from the API is server state. Use query hooks (`hooks/queries/`) and mutation hooks
-(`hooks/mutations/`). See `data-fetching.md` for patterns.
+All data from the API is server state. Use domain hooks from `hooks/` (flat files — queries
+and mutations combined per domain, e.g. `useSources`, `useTags`). See `data-fetching.md`.
 
 ### Local state — `useState`
 

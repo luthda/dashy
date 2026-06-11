@@ -134,7 +134,7 @@ Pragmatic layered architecture enforced by folder conventions within the single 
 
 - All config via the options pattern — `IOptions<T>` / `IOptionsSnapshot<T>`.
 - Constructor injection throughout — never service locator (`IServiceProvider.GetService`).
-- Sensitive values (`ENCRYPTION_KEY`, `POSTGRES_CONNECTION_STRING`) come from environment variables.
+- Sensitive values (`ENCRYPTION_KEY`) come from environment variables. The database connection string (`Database:ConnectionString`) is config, not a secret — it's a path to the SQLite file.
 
 ```csharp
 public class DatabaseOptions

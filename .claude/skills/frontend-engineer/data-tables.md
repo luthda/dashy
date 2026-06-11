@@ -14,7 +14,7 @@ timestamp, level, message, source, and an expandable row for properties.
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
-import type { LogEntry } from "@/types/api"
+import type { LogEntry } from "@/lib/types"
 
 type LogTableProps = {
   entries: LogEntry[]
@@ -65,7 +65,7 @@ Each log row expands on click to reveal `eventType` and `properties` as a key-va
 import { useState } from "react"
 import { TableCell, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import type { LogEntry } from "@/types/api"
+import type { LogEntry } from "@/lib/types"
 
 export function LogRow({ entry }: { entry: LogEntry }) {
   const [expanded, setExpanded] = useState(false)
