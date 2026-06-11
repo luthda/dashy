@@ -9,12 +9,12 @@ public class Alert
     public Source Source { get; set; } = null!;
 
     public string Query { get; set; } = "";
-    public int CheckIntervalSeconds { get; set; } = 300;
     public int Threshold { get; set; } = 1;
     public bool Enabled { get; set; } = true;
 
     public DateTime? LastCheckedAt { get; set; }
     public AlertStatus Status { get; set; } = AlertStatus.Ok;
+    public DateTime? ResolvedAt { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

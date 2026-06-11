@@ -111,22 +111,11 @@ public class LogQueryService(
 
         foreach (var tag in tags)
         {
-            try
+            var filters = TagFilters.FromJson(tag.Filters);
+            if (filters is not null)
             {
-                var filters = JsonSerializer.Deserialize<TagFilterJson>(tag.Filters);
-                if (filters is null)
-                {
-                    continue;
-                }
-
-                var terms = (filters.Terms ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
-                var termGroups = terms.Count > 0 ? new List<List<string>> { terms } : [];
-                var levels = (filters.Levels ?? []).ToList();
-                var eventTypes = (filters.EventTypes ?? []).ToList();
-
-                result.Add(new TagFilters(termGroups, levels, eventTypes));
+                result.Add(filters);
             }
-            catch (JsonException) { /* malformed tag filter — skip */ }
         }
 
         return result;
@@ -165,6 +154,30 @@ public record TagFilters(
     List<string> EventTypes)
 {
     public static TagFilters Empty => new([], [], []);
+
+    /// <summary>Parses a tag's serialized filters JSON. Returns null when malformed.</summary>
+    public static TagFilters? FromJson(string json)
+    {
+        try
+        {
+            var filters = JsonSerializer.Deserialize<TagFilterJson>(json);
+            if (filters is null)
+            {
+                return null;
+            }
+
+            var terms = (filters.Terms ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
+            var termGroups = terms.Count > 0 ? new List<List<string>> { terms } : [];
+            var levels = (filters.Levels ?? []).ToList();
+            var eventTypes = (filters.EventTypes ?? []).ToList();
+
+            return new TagFilters(termGroups, levels, eventTypes);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 }
 
 internal record TagFilterJson(

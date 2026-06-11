@@ -1,4 +1,4 @@
-# dashy
+# <img src="frontend/public/favicon.svg" width="32" alt="" align="top" /> dashy
 
 A dashboard application built with .NET 10 (ASP.NET Core + SQLite) and React + TypeScript + Vite.
 

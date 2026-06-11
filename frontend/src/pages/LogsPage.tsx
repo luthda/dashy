@@ -12,21 +12,25 @@ import { useSourcesQuery } from "@/hooks/useSources"
 import { useTagsQuery } from "@/hooks/useTags"
 import { EVENT_TYPES, LEVELS, type Range } from "@/lib/types"
 import { BookmarkIcon, TagIcon } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 
 const DEFAULT_RANGE: Range = "1h"
-const LIVE_MS = 60_000
-const PAGE = 500
+const SOURCE_STORAGE_KEY = "dashy-source"
 
 export function LogsPage() {
   const { data: sources } = useSourcesQuery()
   const { data: tags } = useTagsQuery()
-  // The user's explicit selection; falls back to the first source once loaded.
-  const [selectedSourceId, setSelectedSourceId] = useState("")
-  const sourceId = selectedSourceId || sources?.[0]?.id || ""
+  // The user's explicit selection, persisted across navigation and reloads.
+  // Falls back to the first source when nothing is stored or the stored
+  // source no longer exists.
+  const [selectedSourceId, setSelectedSourceId] = useState(
+    () => localStorage.getItem(SOURCE_STORAGE_KEY) ?? "",
+  )
+  const sourceId =
+    (sources?.some((s) => s.id === selectedSourceId) ? selectedSourceId : sources?.[0]?.id) ?? ""
   const [query, setQuery] = useState("")
-  // The last query actually submitted (Enter / saved search). Live ticks and
-  // pagination re-run this, not the half-typed text in the search box.
+  // The last query actually submitted (Enter / saved search). The log query
+  // re-runs on this, not the half-typed text in the search box.
   const [submittedQuery, setSubmittedQuery] = useState("")
   const [range, setRange] = useState<Range>(DEFAULT_RANGE)
   const [live, setLive] = useState(true)
@@ -42,59 +46,50 @@ export function LogsPage() {
   const [showAddSource, setShowAddSource] = useState(false)
   const [showTagsDialog, setShowTagsDialog] = useState(false)
   const [showSavedSearches, setShowSavedSearches] = useState(false)
-  const { data, hasMore, isLoading, queryError, serverError, lastUpdatedAt, run } = useLogQuery()
 
-  const runQuery = useCallback(
-    (p: number = page, q: string = submittedQuery) => {
-      if (!sourceId) return
-      const evtFilter = activeEventTypes.size < EVENT_TYPES.length ? [...activeEventTypes] : undefined
-      const tagIds = activeTagIds.size > 0 ? [...activeTagIds] : undefined
-      run({
-        sourceId, query: q || undefined, eventTypes: evtFilter, tagIds,
-        timeRange: { type: "relative", value: range }, limit: PAGE, skip: p * PAGE,
-      })
-    },
-    [sourceId, range, activeEventTypes, activeTagIds, page, submittedQuery, run],
+  // Sorted arrays for a stable query key.
+  const tagIds = useMemo(() => [...activeTagIds].sort(), [activeTagIds])
+  const eventTypesFilter = useMemo(
+    () =>
+      activeEventTypes.size < EVENT_TYPES.length ? [...activeEventTypes].sort() : undefined,
+    [activeEventTypes],
   )
 
-  // Load a saved search string into the bar and run it immediately. `query` state
-  // hasn't flushed yet this tick, so pass the new string to runQuery explicitly.
-  const applySavedSearch = useCallback(
-    (q: string) => {
-      setQuery(q)
-      setSubmittedQuery(q)
+  // Declarative: any change to these params refetches via the query key.
+  const { data, hasMore, isLoading, isFetching, queryError, serverError, lastUpdatedAt, refetch } =
+    useLogQuery({
+      sourceId,
+      query: submittedQuery,
+      range,
+      page,
+      tagIds,
+      eventTypes: eventTypesFilter,
+      live,
+    })
+
+  function selectSource(id: string) {
+    setSelectedSourceId(id)
+    localStorage.setItem(SOURCE_STORAGE_KEY, id)
+    setPage(0)
+  }
+
+  // Enter / search icon: submit the typed query; force a refetch when the
+  // text didn't change (the key would otherwise consider the data fresh).
+  function submitSearch() {
+    if (query === submittedQuery) {
+      refetch()
+    } else {
+      setSubmittedQuery(query)
       setPage(0)
-      runQuery(0, q)
-    },
-    [runQuery],
-  )
-
-  // Ref-tracking: compares refs to detect changes and auto-requery.
-  // prevSourceId starts at "" (not sourceId) so the first render with a real
-  // source always triggers the initial query — even when sources come from the
-  // TanStack Query cache and are available synchronously on mount.
-  const prevSourceId = useRef("")
-  const prevRange = useRef(range)
-  const prevTagIds = useRef(activeTagIds)
-  useEffect(() => {
-    if (!sourceId) return
-    if (prevSourceId.current !== sourceId || prevRange.current !== range || prevTagIds.current !== activeTagIds) {
-      prevSourceId.current = sourceId; prevRange.current = range; prevTagIds.current = activeTagIds; setPage(0); runQuery(0)
     }
-  }, [sourceId, range, activeTagIds, runQuery])
+  }
 
-  // Latest runQuery in a ref so the polling interval isn't torn down and
-  // restarted every time runQuery's identity changes (e.g. on each keystroke).
-  const runQueryRef = useRef(runQuery)
-  useEffect(() => {
-    runQueryRef.current = runQuery
-  }, [runQuery])
-
-  useEffect(() => {
-    if (!live || !sourceId) return
-    const id = setInterval(() => runQueryRef.current(), LIVE_MS)
-    return () => clearInterval(id)
-  }, [live, sourceId])
+  // Load a saved search string into the bar and run it via the key change.
+  function applySavedSearch(q: string) {
+    setQuery(q)
+    setSubmittedQuery(q)
+    setPage(0)
+  }
 
   function toggleSet(setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) {
     setter((prev) => {
@@ -128,14 +123,14 @@ export function LogsPage() {
           <SearchBar
             query={query}
             onQueryChange={setQuery}
-            onSearch={() => { setSubmittedQuery(query); setPage(0); runQuery(0, query) }}
+            onSearch={submitSearch}
             range={range}
             onRangeChange={(r) => { setRange(r); setPage(0) }}
             live={live}
             onLiveToggle={() => setLive((v) => !v)}
-            onRefresh={() => runQuery(page)}
+            onRefresh={() => refetch()}
             error={queryError ?? serverError}
-            isLoading={isLoading}
+            isLoading={isFetching}
             lastUpdatedAt={lastUpdatedAt}
           />
         </div>
@@ -159,7 +154,7 @@ export function LogsPage() {
         <TagChipRow
           tags={tags ?? []}
           activeTagIds={activeTagIds}
-          onToggle={(id) => toggleSet(setActiveTagIds, id)}
+          onToggle={(id) => { toggleSet(setActiveTagIds, id); setPage(0) }}
         />
       )}
 
@@ -178,7 +173,7 @@ export function LogsPage() {
           <span className="text-muted-foreground text-[12px]">Source:</span>
           <select
             value={sourceId}
-            onChange={(e) => setSelectedSourceId(e.target.value)}
+            onChange={(e) => selectSource(e.target.value)}
             className="border-border bg-background h-8 rounded-md border px-2 text-[12.5px] outline-none"
           >
             {sources.map((s) => (
@@ -197,7 +192,7 @@ export function LogsPage() {
         activeLevels={activeLevels}
         onToggleLevel={(id) => toggleSet(setActiveLevels, id)}
         activeEventTypes={activeEventTypes}
-        onToggleEventType={(id) => toggleSet(setActiveEventTypes, id)}
+        onToggleEventType={(id) => { toggleSet(setActiveEventTypes, id); setPage(0) }}
       />
 
       <LogStream rows={filteredRows} isLoading={isLoading} />
@@ -206,8 +201,8 @@ export function LogsPage() {
         <Pagination
           page={page}
           hasMore={hasMore}
-          onPrev={() => { const p = page - 1; setPage(p); runQuery(p) }}
-          onNext={() => { const p = page + 1; setPage(p); runQuery(p) }}
+          onPrev={() => setPage(page - 1)}
+          onNext={() => setPage(page + 1)}
         />
       )}
     </div>

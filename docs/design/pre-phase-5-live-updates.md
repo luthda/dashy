@@ -52,7 +52,7 @@ A small muted label right of the Refresh button shows **when the last successful
 - Does **not** update on failed queries — it always reflects the last data actually shown.
 - Formatted with the browser locale (`toLocaleDateString` + `toLocaleTimeString`), monospace, `muted-foreground`.
 
-The timestamp is owned by `useLogQuery` (`lastUpdatedAt: Date | null`, set in the mutation's `onSuccess`) so every code path that fetches logs updates it for free — no per-call bookkeeping in `LogsPage`.
+The timestamp is owned by `useLogQuery`, derived from TanStack Query's `dataUpdatedAt` — every successful fetch (manual, live tick, key change) updates it for free, with no per-call bookkeeping in `LogsPage`.
 
 ### Chip design
 
@@ -138,11 +138,15 @@ const LIVE_MS = 60_000          // was 30_000
 const [live, setLive] = useState(true)  // was false
 ```
 
-The polling `useEffect` keeps its single-interval enforcement and unmount cleanup, with three refinements from review:
-
-1. **Initial query on cached mount** — the auto-requery effect's `prevSourceId` ref starts at `""`, so the first render with a real source always fires the initial query, even when sources are served synchronously from the TanStack Query cache on remount.
-2. **Stable polling cadence** — the interval effect depends only on `live` and `sourceId`; the latest `runQuery` is read through a ref, so typing, paging, or filter changes no longer tear down and restart the 60-second timer.
-3. **Submitted query only** — live ticks, refresh, and pagination re-run `submittedQuery` (the text last submitted via Enter or a saved search), never the half-typed contents of the search box.
+> **Revision (2026-06-11):** `useLogQuery` was migrated from `useMutation` + imperative
+> effects to a declarative `useQuery` keyed on
+> `[sourceId, range, submittedQuery, page, tagIds, eventTypes]`. The query key is the
+> trigger: any param change refetches, the cache survives navigation (fixing a
+> StrictMode bug where the initial query's result was orphaned on remount), live mode
+> is `refetchInterval: 60_000`, and the timestamp comes from `dataUpdatedAt`. Live
+> ticks, refresh, and pagination re-run only the **submitted** query text — never the
+> half-typed contents of the search box. `refetchOnWindowFocus` is disabled so Paused
+> truly means paused.
 
 ---
 

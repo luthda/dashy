@@ -44,27 +44,24 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
             null, sourceName, ct);
     }
 
+    public async Task<int> CountAsync(AdapterCountRequest request, CancellationToken ct)
+    {
+        var cfg = JsonSerializer.Deserialize<AppInsightsConfig>(request.ConfigJson, JsonSerializerOptions.Web)
+            ?? throw new InvalidOperationException("Invalid App Insights config");
+
+        var kql = BuildCountKql(request.BaseQuery, request.From, request.To);
+
+        logger.LogInformation("App Insights count query for {Source}:\n{Kql}", request.SourceName, kql);
+
+        var result = await ExecuteRawQueryAsync(cfg.AppId, cfg.ApiKey, kql, timespan: null, ct);
+        return ParseCount(result);
+    }
+
     private async Task<List<LogEntry>> ExecuteQueryAsync(
         string appId, string apiKey, string kql, string? timespan,
         string sourceName, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/{appId}/query");
-        request.Headers.Add("X-Api-Key", apiKey);
-        request.Content = JsonContent.Create(new { query = kql, timespan });
-
-        using var response = await http.SendAsync(request, ct);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var body = await response.Content.ReadAsStringAsync(ct);
-            logger.LogWarning("App Insights query failed {StatusCode}: {Body}",
-                (int)response.StatusCode, body);
-            throw new AppInsightsQueryException((int)response.StatusCode, body);
-        }
-
-        var result = await response.Content
-            .ReadFromJsonAsync<AppInsightsQueryResult>(ct)
-            ?? throw new InvalidOperationException("Empty response from App Insights");
+        var result = await ExecuteRawQueryAsync(appId, apiKey, kql, timespan, ct);
 
         var entries = MapToLogEntries(result, sourceName);
 
@@ -80,6 +77,49 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
             sourceName, rawRows, entries.Count, breakdown);
 
         return entries;
+    }
+
+    private async Task<AppInsightsQueryResult> ExecuteRawQueryAsync(
+        string appId, string apiKey, string kql, string? timespan, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/{appId}/query");
+        request.Headers.Add("X-Api-Key", apiKey);
+        request.Content = JsonContent.Create(new { query = kql, timespan });
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        using var response = await http.SendAsync(request, ct);
+        stopwatch.Stop();
+
+        logger.LogInformation("App Insights responded {StatusCode} in {ElapsedMs} ms",
+            (int)response.StatusCode, stopwatch.ElapsedMilliseconds);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            logger.LogWarning("App Insights query failed {StatusCode}: {Body}",
+                (int)response.StatusCode, body);
+            throw new AppInsightsQueryException((int)response.StatusCode, body);
+        }
+
+        return await response.Content
+            .ReadFromJsonAsync<AppInsightsQueryResult>(ct)
+            ?? throw new InvalidOperationException("Empty response from App Insights");
+    }
+
+    private static int ParseCount(AppInsightsQueryResult result)
+    {
+        if (result.Tables is not [var table, ..] || table.Rows is not [var row, ..] || row.Length == 0)
+        {
+            return 0;
+        }
+
+        var el = row[0];
+        if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var n))
+        {
+            return n;
+        }
+
+        return int.TryParse(el.GetRawText().Trim('"'), out var parsed) ? parsed : 0;
     }
 
     // ── KQL builder ──────────────────────────────────────────────────────────
@@ -105,6 +145,32 @@ public sealed class AppInsightsAdapter(HttpClient http, ILogger<AppInsightsAdapt
         [Models.EventType.Availability] = "availabilityResults",
         [Models.EventType.PageView] = "pageViews",
     };
+
+    /// <summary>
+    /// Wraps an alert's stored base query with its poll window and a count
+    /// aggregation. The window is recomputed fresh each poll, so logs older than
+    /// one check interval are never re-evaluated.
+    /// </summary>
+    public string BuildAlertQuery(TagFilters filters)
+    {
+        var kql = BuildKql(freeText: null, timeRange: null, tags: filters, limit: 1000);
+        return TrimTrailingLimit(kql);
+    }
+
+    // The stored alert query is the base KQL without the global limit — the
+    // polling service appends its own time window and count clause at execution time.
+    private static string TrimTrailingLimit(string kql)
+    {
+        var idx = kql.LastIndexOf("\n| limit ", StringComparison.Ordinal);
+        return idx >= 0 ? kql[..idx] : kql;
+    }
+
+    // Filters on ingestion_time(), not timestamp: App Insights ingestion lags
+    // minutes behind the event time, so a timestamp window that has already
+    // moved past the event would silently miss it. The half-open interval
+    // (from, to] matches the tiling poll windows — no double counting.
+    public static string BuildCountKql(string baseQuery, DateTime from, DateTime to) =>
+        $"{baseQuery}\n| where ingestion_time() > datetime({from:O}) and ingestion_time() <= datetime({to:O})\n| count";
 
     public static string BuildKql(
         string? freeText, TimeRangeRequest? timeRange, TagFilters tags, int limit,

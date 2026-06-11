@@ -27,10 +27,6 @@ public class AlertConfiguration : IEntityTypeConfiguration<Alert>
 
         builder.Property(a => a.Query).HasColumnName("query").IsRequired();
 
-        builder.Property(a => a.CheckIntervalSeconds)
-            .HasColumnName("check_interval_seconds")
-            .HasDefaultValue(300);
-
         builder.Property(a => a.Threshold)
             .HasColumnName("threshold")
             .HasDefaultValue(1);
@@ -45,6 +41,8 @@ public class AlertConfiguration : IEntityTypeConfiguration<Alert>
             .HasColumnName("status")
             .HasConversion<string>()
             .HasDefaultValue(AlertStatus.Ok);
+
+        builder.Property(a => a.ResolvedAt).HasColumnName("resolved_at");
 
         builder.Property(a => a.CreatedAt)
             .HasColumnName("created_at")
