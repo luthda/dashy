@@ -94,6 +94,17 @@ export function LogsPage() {
     }
   }, [sourceId, range, activeTagIds, runQuery])
 
+  // Re-arm the auto-query on unmount. The query runs through useMutation, whose
+  // in-flight result dies with the unmounted observer — without this, React
+  // StrictMode's simulated unmount in dev orphans the initial query's response
+  // (the ref guard blocks a re-fetch on the second mount) and the list stays
+  // empty until the next live tick.
+  useEffect(() => {
+    return () => {
+      prevSourceId.current = ""
+    }
+  }, [])
+
   // Latest runQuery in a ref so the polling interval isn't torn down and
   // restarted every time runQuery's identity changes (e.g. on each keystroke).
   const runQueryRef = useRef(runQuery)
